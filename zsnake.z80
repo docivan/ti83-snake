@@ -1,0 +1,161 @@
+.NOLIST
+#define equ .equ
+#define EQU .equ
+#define end .end
+#include "ti83asm.inc"
+#include "tokens.inc"
+
+WAITKEY .equ     4CFEh  ; Wait for a key and read
+BUFCLR	.equ	 515Bh	; Clear the graph backup
+BUFCOPY .equ	 5164h	; Copy the graph backup to the screen
+RINDOFF .equ	 4795h	; Turn off runindicator
+PRINTHL .equ	 4709h	; Print HL in dec. on the screen
+OP2TOP1 .equ	 41C2h	; Move OP2 to OP1
+CONVOP1 .equ	 4EFCh	; Convert fp value in OP1 to a 2 byte hex
+READKEY .equ	 4A18h	; Read key and place it in OP2 as a fp value
+GOHOME	.equ	 47A1h	; Go to home screen (finish gfx program)
+CLRTSHD .equ	 4765h	; Clear text shadow
+HOMEUP	.equ	 4775h	; Place cursor at home
+STRING	.equ	 470Dh	; Print 0 terminated string to screen (hl->string)
+
+VIDMEM	.equ	8E29h ; video mem
+
+.LIST
+.org 9327h
+
+    call _clrLCDFull ;Clear the screen.
+    ld hl,0003 ;Put 3 into Hl.
+    ld (currow),hl ;Put HL into cursor row.
+    ld hl,mem ;Loads text in hl.
+    ;call _PUTS ;Ends string....
+    ;call _PDspGrph
+    ;call _REGRAPH
+    ;call _PUTXY
+    ;ld hl,55h
+    ;ld (8E29h),hl
+    
+    ;call _clrScrnFull
+    ;call _clrLCDFull
+    
+    ; testing
+    ;call 515Bh
+    ;call 5164h
+    
+    ;jp HACK
+    
+    call    RINDOFF         ; Turn off runindicator
+        call    BUFCLR          ; Clear the graphbuf
+        call    BUFCOPY         ; Copy the graphbuf to the LCD
+   
+   
+   ld hl, 0101010101100110b	; little-endian / LSB / least significant first
+   ld (8E29h),hl
+   
+   ;96x64... ie 12x8 bytes
+   ld hl, VIDMEM
+   ld bc,342 ;8x8 should be at x=44 y=28; ie ca 336 + 48 = 384
+   add hl,bc
+   ld (hl), 00111100b
+   
+   ld bc,12
+   
+   add hl,bc
+   ld (hl), 01000010b
+   
+   add hl,bc
+   ld (hl), 10100101b
+   
+   add hl,bc
+   ld (hl), 10000001b
+   
+   add hl,bc
+   ld (hl), 10100101b
+   
+   add hl,bc
+   ld (hl), 10011001b
+   
+   add hl,bc
+   ld (hl), 01000010b
+   
+   add hl,bc
+   ld (hl), 00111100b
+   
+   ;call    BUFCOPY         ; Copy the graphbuf to the LCD
+   
+HACK:
+	call _clrLCDFull ;Clear the screen.
+	call _RANDOM
+	;call _formReal
+   ;ld hl,currow
+   ;inc (hl)
+   ;ld (currow),hl ;Put HL into cursor row.
+   ;ld hl,OP3 ;Loads text in hl.
+   ;call _PUTS
+   ;ld a,4
+   ;call _DISPOP1A
+   
+   ;ret
+   ;call _CONVOP1
+   ;ld hl,5
+   ;add hl,de
+   ;ld l,1
+   ;ld l,0
+   
+   ;ld hl,OP1
+   ;ld de,6
+   ;add hl,de
+   ;ld a,(hl)
+   ;ld h,0
+   
+   
+   ;ld l,a
+   
+   ld a,64
+   call gen_rnd
+   ld h,0
+   ld l,a
+   call _dispHL
+   ;ld a,5
+   ;call _DISPOP1A
+   ;call    BUFCOPY
+   
+   
+   ret 
+   
+   ld hl,OP1
+   ld de,1
+   add hl,de
+   ld a,(hl)
+   
+   ld d,a
+   ld e,0
+   
+   ld hl,0
+   add hl,de
+   
+   ;ld hl,0
+   ;add hl,de
+   ;call _dispHL
+    
+    ret ;Return to basic mode.
+
+gen_rnd: ; a - max val, should be <256
+	ld b,a
+	call _RANDOM
+	ld hl,OP1
+   ld de,6
+   add hl,de
+   ld a,(hl) ; random number
+   ;ret
+gen_rnd_loop:
+	ld c,a ; c - previous number
+	sub b
+	jp nc,gen_rnd_loop
+	
+	ld a,c ; load previous nr into a
+	ret
+   
+
+mem: ;This is your label.
+.db "Hello, I am Ivan!",0
+.end
