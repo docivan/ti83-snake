@@ -23,139 +23,78 @@ VIDMEM	.equ	8E29h ; video mem
 .LIST
 .org 9327h
 
-    call _clrLCDFull ;Clear the screen.
-    ld hl,0003 ;Put 3 into Hl.
-    ld (currow),hl ;Put HL into cursor row.
-    ld hl,mem ;Loads text in hl.
-    ;call _PUTS ;Ends string....
-    ;call _PDspGrph
-    ;call _REGRAPH
-    ;call _PUTXY
-    ;ld hl,55h
-    ;ld (8E29h),hl
-    
-    ;call _clrScrnFull
-    ;call _clrLCDFull
-    
-    ; testing
-    ;call 515Bh
-    ;call 5164h
-    
-    ;jp HACK
-    
-    call    RINDOFF         ; Turn off runindicator
-        call    BUFCLR          ; Clear the graphbuf
-        call    BUFCOPY         ; Copy the graphbuf to the LCD
-   
-   
-   ld hl, 0101010101100110b	; little-endian / LSB / least significant first
-   ld (8E29h),hl
-   
-   ;96x64... ie 12x8 bytes
-   ld hl, VIDMEM
-   ld bc,342 ;8x8 should be at x=44 y=28; ie ca 336 + 48 = 384
-   add hl,bc
-   ld (hl), 00111100b
-   
-   ld bc,12
-   
-   add hl,bc
-   ld (hl), 01000010b
-   
-   add hl,bc
-   ld (hl), 10100101b
-   
-   add hl,bc
-   ld (hl), 10000001b
-   
-   add hl,bc
-   ld (hl), 10100101b
-   
-   add hl,bc
-   ld (hl), 10011001b
-   
-   add hl,bc
-   ld (hl), 01000010b
-   
-   add hl,bc
-   ld (hl), 00111100b
-   
-   ;call    BUFCOPY         ; Copy the graphbuf to the LCD
-   
-HACK:
-	call _clrLCDFull ;Clear the screen.
-	call _RANDOM
-	;call _formReal
-   ;ld hl,currow
-   ;inc (hl)
-   ;ld (currow),hl ;Put HL into cursor row.
-   ;ld hl,OP3 ;Loads text in hl.
-   ;call _PUTS
-   ;ld a,4
-   ;call _DISPOP1A
-   
-   ;ret
-   ;call _CONVOP1
-   ;ld hl,5
-   ;add hl,de
-   ;ld l,1
-   ;ld l,0
-   
-   ;ld hl,OP1
-   ;ld de,6
-   ;add hl,de
-   ;ld a,(hl)
-   ;ld h,0
-   
-   
-   ;ld l,a
-   
-   ld a,64
-   call gen_rnd
-   ld h,0
-   ld l,a
-   call _dispHL
-   ;ld a,5
-   ;call _DISPOP1A
-   ;call    BUFCOPY
-   
-   
-   ret 
-   
-   ld hl,OP1
-   ld de,1
-   add hl,de
-   ld a,(hl)
-   
-   ld d,a
-   ld e,0
-   
-   ld hl,0
-   add hl,de
-   
-   ;ld hl,0
-   ;add hl,de
-   ;call _dispHL
-    
-    ret ;Return to basic mode.
-
-gen_rnd: ; a - max val, should be <256
-	ld b,a
-	call _RANDOM
-	ld hl,OP1
-   ld de,6
-   add hl,de
-   ld a,(hl) ; random number
-   ;ret
-gen_rnd_loop:
-	ld c,a ; c - previous number
-	sub b
-	jp nc,gen_rnd_loop
+	; prep environment
+	call    RINDOFF         ; Turn off runindicator
+	call    BUFCLR          ; Clear the graphbuf
+	call    BUFCOPY         ; Copy the graphbuf to the LCD
 	
-	ld a,c ; load previous nr into a
+main_loop:
+	;96x64... ie 12x64 bytes
+	
+	ld a,255 ; TODO: 255 is too small!!
+	call gen_rnd
+	ld (pos_x),a
+	
+	ld hl,VIDMEM
+	ld c,a
+	ld b,0
+	add hl,bc
+	ld (hl), 10101010b
+	call BUFCOPY
+	
+	
+	
+	jp main_loop
+	
+	;ld e,a
+   ;ld d,0
+   ;ex de,hl ;de is now garbage
+   ;call _dispHL
 	ret
-   
+
+pos_x:	.db	0
+pos_y:	.db	0
+max_len:	.db	64
+snake_head:	
+.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+
+; #######################################################################################
+; gen_rnd: generate a random number from 0 up to and including max
+;
+; reg a = max value <256
+; kills e
+; returns a
+; #######################################################################################
+gen_rnd:
+	ld e,a
+	push de			; save parsed params
+	call _RANDOM	; call internal routine
+   ld a,(OP1+6)	; get the random nr stored in (OP1 + 6)
+   pop de 			; get parsed params back
+gen_rnd_loop:
+	sub e				; a-e
+	jp nc,gen_rnd_loop ; if result < 0, continue
+	
+	add a,e			; add max_val to result to make it positive
+	ld e,a			; store it in a
+	
+	; this is to make this function inclusive of max_val
+	ld a,r			; get mem refresh register
+	and 00000010b	; mask bit 6 only (the last bit (7) is not altered by mem refresh)
+	jp z,gen_rnd_finished
+	
+	inc e				; if the bit is 1, increase value
+	
+gen_rnd_finished:
+	ld a,e			; store return value in a
+	ret
 
 mem: ;This is your label.
-.db "Hello, I am Ivan!",0
+.db "FILLERFILLERFILLERFILLERFILLER"
+.db "FILLERFILLERFILLERFILLERFILLER"
+.db "FILLERFILLERFILLERFILLERFILLER"
+.db "FILLERFILLERFILLERFILLERFILLER",0
 .end
