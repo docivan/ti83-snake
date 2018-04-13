@@ -5,6 +5,10 @@
 #include "ti83asm.inc"
 #include "tokens.inc"
 
+; #######################################################################################
+; CONSTANTS
+; #######################################################################################
+
 WAITKEY .equ     4CFEh  ; Wait for a key and read
 BUFCLR	.equ	 515Bh	; Clear the graph backup
 BUFCOPY .equ	 5164h	; Copy the graph backup to the screen
@@ -18,7 +22,20 @@ CLRTSHD .equ	 4765h	; Clear text shadow
 HOMEUP	.equ	 4775h	; Place cursor at home
 STRING	.equ	 470Dh	; Print 0 terminated string to screen (hl->string)
 
-VIDMEM	.equ	8E29h ; video mem
+_vram	.equ	8E29h ; video mem
+
+; #######################################################################################
+; USER DEFINED CONSTANTS
+; #######################################################################################
+
+snake_len_max	.equ	64
+scr_w 			.equ	96
+scr_h				.equ	64
+scr_w_b			.equ	scr_w/8
+
+; #######################################################################################
+; PROGRAM ENTRY POINT
+; #######################################################################################
 
 .LIST
 .org 9327h
@@ -35,16 +52,13 @@ main_loop:
 	call gen_rnd
 	ld (pos_x),a
 	
-	ld hl,VIDMEM
-	ld c,a
-	ld b,0
-	add hl,bc
-	ld (hl), 10101010b
-	call BUFCOPY
 	
 	
+	;jp main_loop
 	
-	jp main_loop
+	;call test_div
+	;call test_div_unsafe
+	;call test_mul
 	
 	;ld e,a
    ;ld d,0
@@ -54,12 +68,333 @@ main_loop:
 
 pos_x:	.db	0
 pos_y:	.db	0
-max_len:	.db	64
-snake_head:	
-.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-.dw 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+
+; #######################################################################################
+; TESTING FUNCS
+; #######################################################################################
+
+test_pxl:
+	ld hl,_vram
+	ld c,12
+	ld b,0
+	add hl,bc
+	ld (hl), 10101010b
+	;call BUFCOPY
+	
+	ld de,12*20
+	ld c,0
+	;call put_pxl
+	
+	ld de,12*20
+	ld c,2
+	;call put_pxl
+	
+	ld de,12*20
+	ld c,4
+	;call put_pxl
+	
+	ld de,12*20
+	ld c,6
+	;call put_pxl
+	
+	ld a,47
+	ld b,31
+	call put_pxl
+	
+	ld a,0
+	ld b,1
+	call clr_pxl
+	
+	ld a,2
+	ld b,1
+	call clr_pxl
+	
+	call BUFCOPY
+	ret
+
+test_mul:
+; mul a*b = hl
+; kills de, hl, ab
+; result in hl
+	ld a,12
+	ld b,4
+	call mul
+	call _dispHL
+	
+	ld a,4
+	ld b,12
+	call mul
+	call _dispHL
+	
+	ld a,0
+	ld b,12
+	call mul
+	call _dispHL
+	
+	ld a,12
+	ld b,0
+	call mul
+	call _dispHL
+	ret
+
+test_div:
+	ld d,255
+	ld e,2
+	call div
+	ld h,0
+	ld l,a
+	push bc
+	call _dispHL
+	pop bc
+	ld h,0
+	ld l,b
+	call _dispHL
+	
+	ld d,15
+	ld e,0
+	call div
+	ld h,0
+	ld l,a
+	push bc
+	call _dispHL
+	pop bc
+	ld h,0
+	ld l,b
+	call _dispHL
+	ret
+
+test_div_unsafe:
+	ld a,15
+	ld b,5
+	call div_unsafe
+	ld h,0
+	ld l,d
+	push de
+	call _dispHL
+	pop de
+	ld h,0
+	ld l,e
+	call _dispHL
+	
+	ld a,15
+	ld b,6
+	call div_unsafe
+	ld h,0
+	ld l,d
+	push de
+	call _dispHL
+	pop de
+	ld h,0
+	ld l,e
+	call _dispHL
+	
+	; floating division
+	ld a,5
+	ld b,15
+	call div_unsafe
+	ld h,0
+	ld l,d
+	push de
+	call _dispHL
+	pop de
+	ld h,0
+	ld l,e
+	call _dispHL
+	ret
+
+; #######################################################################################
+; PIXEL MANIPULATION
+; #######################################################################################
+
+; #######################################################################################
+; put_pxl: put pixel at (a,b)
+;
+; kills bascially everything
+; returns nothing
+; #######################################################################################
+
+put_pxl:
+	call get_vram_addr
+	
+	ld hl, bitmasks
+	ld b,0
+	add hl,bc
+	ld c,(hl) ; bitmask is now stored in c
+	
+	ld hl, _vram
+	add hl,de
+	ld a,(hl)
+	xor c			; XOR
+	
+	ld (hl),a 	; put back the byte
+	ret
+
+; #######################################################################################
+; clr_pxl: clear pixel at (a,b)
+;
+; kills bascially everything
+; returns nothing
+; #######################################################################################
+
+clr_pxl:
+	;the same as put_pxl, but with an extra NOT (cpl) and AND
+	call get_vram_addr
+	
+	ld hl, bitmasks
+	ld b,0
+	add hl,bc
+	ld c,(hl) ; bitmask is now stored in c
+	ld a,c
+	cpl			;NOT
+	ld c,a
+	
+	ld hl, _vram
+	add hl,de
+	ld a,(hl)
+	and c			; AND
+	
+	ld (hl),a 	; put back the byte
+	ret
+
+; get pixel val from (a,b)
+; returns nothing
+
+get_pxl:
+	; TODO
+	ret
+
+; #######################################################################################
+; get_vram_addr: convert coords (a,b) to array idx (de) and which bit to flip (c)
+;
+; kills bascially everything
+; returns de, c
+; #######################################################################################
+
+get_vram_addr:	
+	; idx = y*scr_w_ch + (int)(x/8)
+	; bit = rest after div
+	
+	ld d,a
+	ld e,8
+	push de
+	
+	; y*scr_w_b
+	ld a,b
+	ld b,scr_w_b
+	call mul 		;result in hl
+	
+	pop de	; get ready for division
+	push hl 	; push result on the stack
+	call div	; now a = result, b = rest
+	
+	ld d,0
+	ld e,a
+	
+	pop hl
+	add hl,de
+	
+	; return values
+	ld d,h
+	ld e,l
+	
+	ld c,b
+	
+	ret
+
+
+; #######################################################################################
+; div: perform multiplication of two 8 byte integers hl = a*b
+;
+; kills de, hl, ab
+; returns hl
+; #######################################################################################
+
+mul:
+	ld hl,0
+	ld d,0
+	
+	; is a == 0?
+	cp d
+	jp z, mul_zero
+	
+	; speed up by forking according to a>b?
+	cp b
+	jp c,mul_b_lt_a
+	
+	;a>b
+	ld e,a
+	jp mul_loop
+    
+	;b>a
+mul_b_lt_a:
+	ld e,b
+	ld b,a
+
+mul_loop:
+	add hl,de
+	dec b
+	jp pe, mul_zero ; b == -1, ie was == 0
+	jp nz, mul_loop
+	
+	ret
+	
+mul_zero: ; multipleier is zero
+	ld hl,0
+	ret
+    
+
+; #######################################################################################
+; div_unsafe: perform 8 byte integer division d = a/b, e = rest
+; NB! div/0 will hang the machine!
+;
+; kills <none>
+; returns de
+; #######################################################################################
+div_unsafe:
+	ld d,0
+	
+div_unsafe_loop:
+	inc d
+	sub b
+	jp nc, div_unsafe_loop
+	
+	dec d
+	add a,b
+	ld e,a 
+	ret
+
+
+; #######################################################################################
+; div: perform 8 byte integer division a = d/e, b = rest
+;
+; kills <none>
+; returns ab
+; #######################################################################################
+
+div:
+	; avoid div/0
+	ld a,0
+	cp e
+	jp nz, div_non_zero
+	ld b,0
+	ret
+
+div_non_zero:
+	ld a,d
+	ld d,0
+div_loop:
+	inc d
+	sub e
+	jp nc, div_loop
+	
+	dec d		; wind back div counter with 1
+	add a,e	; add divident to get rest
+	
+	; store in de
+	ld b,a
+	ld a,d
+	ret
+
 
 ; #######################################################################################
 ; gen_rnd: generate a random number from 0 up to and including max
@@ -92,9 +427,20 @@ gen_rnd_finished:
 	ld a,e			; store return value in a
 	ret
 
-mem: ;This is your label.
-.db "FILLERFILLERFILLERFILLERFILLER"
-.db "FILLERFILLERFILLERFILLERFILLER"
-.db "FILLERFILLERFILLERFILLERFILLER"
-.db "FILLERFILLERFILLERFILLERFILLER",0
+; #######################################################################################
+; sprites and other mem defines
+
+bitmasks:
+	.db 10000000b ;0
+	.db 01000000b ;1
+	.db 00100000b ;2
+	.db 00010000b ;3
+	.db 00001000b ;4
+	.db 00000100b ;5
+	.db 00000010b ;6
+	.db 00000001b ;7
+
+; this will grow upwards towards the stack
+snake_head:	.dw 0
+
 .end
