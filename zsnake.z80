@@ -33,6 +33,11 @@ scr_w 			.equ	96
 scr_h				.equ	64
 scr_w_b			.equ	scr_w/8
 
+DIR_N				.equ	0
+DIR_E				.equ	1
+DIR_S				.equ	2
+DIR_W				.equ	3
+
 ; #######################################################################################
 ; PROGRAM ENTRY POINT
 ; #######################################################################################
@@ -45,29 +50,199 @@ scr_w_b			.equ	scr_w/8
 	call    BUFCLR          ; Clear the graphbuf
 	call    BUFCOPY         ; Copy the graphbuf to the LCD
 	
+	call init_snake
+	
 main_loop:
-	;96x64... ie 12x64 bytes
+	;call menu
+	call draw_map
+	call draw_snake
+	call move_snake
+	call handle_input
 	
-	ld a,255 ; TODO: 255 is too small!!
-	call gen_rnd
-	ld (pos_x),a
-	
-	
-	
-	;jp main_loop
-	
-	;call test_div
-	;call test_div_unsafe
-	;call test_mul
-	
-	;ld e,a
-   ;ld d,0
-   ;ex de,hl ;de is now garbage
-   ;call _dispHL
 	ret
+
+draw_map:
+	ld de,lvl1_map
+	ld hl,_vram
+
+outer_loop:
+	ld b,10000000b
+	
+inner_loop:
+	ld a,(de)
+	
+	xor 
+	jp z,dmbit2
+	ld c,11110000b
+	ld a,(de)
+	or c
+	ld (hl),a
+
+	
+	ld ixl,0
+	ld hl,_vram-1
+	ld de,lvl1_map-1
+	ld b,00000001b
+	rr b ;carry primed with 1
+
+dmloop:
+	inc hl 			;switch to next byte in _vram for every two bits in map
+	rr b				;shift to next bit in map mask byte
+	ld a,(de)		;get current map byte
+	xor b				;xor mask
+	jp z,dmbit2		;if empty - go to next bit
+	ld (hl),11110000b	;draw
+dmbit2:
+	rr b				;shift to next bit in map mask byte
+	jp z,dmnxtbyte	;if it is zero, load next byte from map
+	ld a,(de)		;get current map byte
+	xor b				;xor mask
+	jp z,dmloop		;if there is nothing to draw, continue with next 2 bits
+	ld c,00001111b	;otherwise load what to draw
+	ld a,(de)		;load vram byte
+	or c				;apply it on top of already drawn mem
+	ld (hl),a		;cp to vram
+dmnxtbyte:
+	inc de			;load next map byte
+	jp dmloop		;continue
+	
+
+
+dmloop:
+	ld a,(de)
+	xor 10000000b
+	jp z,dmbit2
+	ld c,11110000b
+	ld a,(de)
+	or c
+	ld (hl),a
+dmbit2:
+	ld a,(de)
+	xor 01000000b
+	jp z,dmbit3
+	ld c,00001111b
+	ld a,(de)
+	or c
+	ld (hl),a
+dmbit3:
+	inc hl
+	ld a,(de)
+	xor 10000000b
+	jp z,dmbit2
+	ld c,11110000b
+	ld a,(de)
+	or c
+	ld (hl),a
+dmbit4:
+	ld a,(de)
+	xor 01000000b
+	jp z,dmbit3
+	ld c,00001111b
+	ld a,(de)
+	or c
+	ld (hl),a
+dmbit5:
+	inc hl
+	ld a,(de)
+	xor 10000000b
+	jp z,dmbit2
+	ld c,11110000b
+	ld a,(de)
+	or c
+	ld (hl),a
+dmbit6:
+	ld a,(de)
+	xor 01000000b
+	jp z,dmbit3
+	ld c,00001111b
+	ld a,(de)
+	or c
+	ld (hl),a
+dmbit7:
+	inc hl
+	ld a,(de)
+	xor 10000000b
+	jp z,dmbit2
+	ld c,11110000b
+	ld a,(de)
+	or c
+	ld (hl),a
+dmbit8:
+	ld a,(de)
+	xor 01000000b
+	jp z,dmnxtline
+	ld c,00001111b
+	ld a,(de)
+	or c
+	ld (hl),a
+dmnxtline:
+	inc hl
+	inc de
+	jp dmloop
+	
+	; d - byte idx in horiz
+	; e - byte idx in vert
+draw_map_hscan_loop:
+	xor b
+	
+	
+	ret
+
+
+handle_input
+	; TODO
+	ret
+
+move_snake:
+	;TODO
+	ret
+
+draw_snake:
+	;TODO
+	ld hl, snake_head
+	
+	ret
+
+init_snake:
+	ld hl, snake_head
+	
+	ld (hl),48	 ;x
+	inc hl
+	ld (hl),31 ;y
+	inc hl
+	
+	ld (hl),47	 ;x
+	inc hl
+	ld (hl),31 ;y
+	inc hl
+	
+	ld (hl),46	 ;x
+	inc hl
+	ld (hl),31 ;y
+	inc hl
+	
+	ret
+
+;puts in coords in (a,b)
+gen_rnd_xy:
+	; gen y
+	ld a,scr_h-1
+	call gen_rnd
+	ld b,a
+	; gen x
+	push bc
+	ld a,scr_w-1
+	call gen_rnd
+	pop bc
+	; done
+	ret
+	
+
+cur_map:	.dw	0
 
 pos_x:	.db	0
 pos_y:	.db	0
+dir:		.db 	0
 
 ; #######################################################################################
 ; TESTING FUNCS
@@ -430,6 +605,8 @@ gen_rnd_finished:
 ; #######################################################################################
 ; sprites and other mem defines
 
+; LUTS
+
 bitmasks:
 	.db 10000000b ;0
 	.db 01000000b ;1
@@ -439,6 +616,27 @@ bitmasks:
 	.db 00000100b ;5
 	.db 00000010b ;6
 	.db 00000001b ;7
+
+; assets
+
+lvl1_map: ;3x16 bytes
+	.db 11000000b, 00000000b, 00000011b
+	.db 10000000b, 00000000b, 00000001b
+	.db 00000000b, 000111100b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00111100b, 00000000b
+	.db 10000000b, 00000000b, 00000001b
+	.db 11000000b, 00000000b, 00000011b
+
 
 ; this will grow upwards towards the stack
 snake_head:	.dw 0
