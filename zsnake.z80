@@ -68,13 +68,12 @@ main_loop:
 	ret
 
 dmloopvar: .db 48
+dmbytecnt: .db	3
 draw_map:
 	ld hl,_vram-1
 	ld de,lvl1_map
 	ld b,00000001b
 	rr b ;carry primed with 1
-	;ret
-
 
 dmloop:
 	rr b				;shift to next bit in map mask byte
@@ -97,10 +96,23 @@ dmbit2:
 	jp dmloop
 dmnxtbyte:
 	inc de			;load next map byte
+	
 	ld a,(dmloopvar)
 	dec a
 	ret z
 	ld (dmloopvar),a
+	
+	ld a,(dmbytecnt)
+	dec a
+	jp nz,dmloop
+	
+	ld a,3
+	ld (dmbytecnt),a
+	
+	push de
+	ld de,3*4
+	add hl,de
+	pop de
 	jp dmloop		;continue
 
 handle_input
@@ -540,5 +552,15 @@ lvl1_map: ;3x16 bytes
 
 ; this will grow upwards towards the stack
 snake_head:	.dw 0
+
+snake:
+	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
+	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
+	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
+	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
+	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
+	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
+	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
+	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255
 
 .end
