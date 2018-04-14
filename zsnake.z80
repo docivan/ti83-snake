@@ -54,140 +54,54 @@ DIR_W				.equ	3
 	
 main_loop:
 	;call menu
+	
+	call init_snake
 	call draw_map
+	call BUFCOPY
+	
+	; below is the main vgame loop
 	call draw_snake
+	
 	call move_snake
 	call handle_input
 	
 	ret
 
+dmloopvar: .db 48
 draw_map:
-	ld de,lvl1_map
-	ld hl,_vram
-
-outer_loop:
-	ld b,10000000b
-	
-inner_loop:
-	ld a,(de)
-	
-	xor 
-	jp z,dmbit2
-	ld c,11110000b
-	ld a,(de)
-	or c
-	ld (hl),a
-
-	
-	ld ixl,0
 	ld hl,_vram-1
-	ld de,lvl1_map-1
+	ld de,lvl1_map
 	ld b,00000001b
 	rr b ;carry primed with 1
+	;ret
+
 
 dmloop:
-	inc hl 			;switch to next byte in _vram for every two bits in map
 	rr b				;shift to next bit in map mask byte
+	jp z,dmnxtbyte	;if it is zero, load next byte from map
+	
+	inc hl 			;switch to next byte in _vram for every two bits in map
 	ld a,(de)		;get current map byte
-	xor b				;xor mask
+	and b				;and mask
 	jp z,dmbit2		;if empty - go to next bit
 	ld (hl),11110000b	;draw
 dmbit2:
 	rr b				;shift to next bit in map mask byte
-	jp z,dmnxtbyte	;if it is zero, load next byte from map
 	ld a,(de)		;get current map byte
-	xor b				;xor mask
+	and b				;and mask
 	jp z,dmloop		;if there is nothing to draw, continue with next 2 bits
 	ld c,00001111b	;otherwise load what to draw
-	ld a,(de)		;load vram byte
+	ld a,(hl)		;load vram byte
 	or c				;apply it on top of already drawn mem
 	ld (hl),a		;cp to vram
+	jp dmloop
 dmnxtbyte:
 	inc de			;load next map byte
+	ld a,(dmloopvar)
+	dec a
+	ret z
+	ld (dmloopvar),a
 	jp dmloop		;continue
-	
-
-
-dmloop:
-	ld a,(de)
-	xor 10000000b
-	jp z,dmbit2
-	ld c,11110000b
-	ld a,(de)
-	or c
-	ld (hl),a
-dmbit2:
-	ld a,(de)
-	xor 01000000b
-	jp z,dmbit3
-	ld c,00001111b
-	ld a,(de)
-	or c
-	ld (hl),a
-dmbit3:
-	inc hl
-	ld a,(de)
-	xor 10000000b
-	jp z,dmbit2
-	ld c,11110000b
-	ld a,(de)
-	or c
-	ld (hl),a
-dmbit4:
-	ld a,(de)
-	xor 01000000b
-	jp z,dmbit3
-	ld c,00001111b
-	ld a,(de)
-	or c
-	ld (hl),a
-dmbit5:
-	inc hl
-	ld a,(de)
-	xor 10000000b
-	jp z,dmbit2
-	ld c,11110000b
-	ld a,(de)
-	or c
-	ld (hl),a
-dmbit6:
-	ld a,(de)
-	xor 01000000b
-	jp z,dmbit3
-	ld c,00001111b
-	ld a,(de)
-	or c
-	ld (hl),a
-dmbit7:
-	inc hl
-	ld a,(de)
-	xor 10000000b
-	jp z,dmbit2
-	ld c,11110000b
-	ld a,(de)
-	or c
-	ld (hl),a
-dmbit8:
-	ld a,(de)
-	xor 01000000b
-	jp z,dmnxtline
-	ld c,00001111b
-	ld a,(de)
-	or c
-	ld (hl),a
-dmnxtline:
-	inc hl
-	inc de
-	jp dmloop
-	
-	; d - byte idx in horiz
-	; e - byte idx in vert
-draw_map_hscan_loop:
-	xor b
-	
-	
-	ret
-
 
 handle_input
 	; TODO
@@ -620,23 +534,9 @@ bitmasks:
 ; assets
 
 lvl1_map: ;3x16 bytes
-	.db 11000000b, 00000000b, 00000011b
-	.db 10000000b, 00000000b, 00000001b
-	.db 00000000b, 000111100b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00111100b, 00000000b
-	.db 10000000b, 00000000b, 00000001b
-	.db 11000000b, 00000000b, 00000011b
-
+	.db 255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+	.db 255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
+	.db 255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255
 
 ; this will grow upwards towards the stack
 snake_head:	.dw 0
