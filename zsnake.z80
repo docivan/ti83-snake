@@ -39,12 +39,22 @@ DIR_E				.equ	1
 DIR_S				.equ	2
 DIR_W				.equ	3
 
+key_UP			.equ	4
+key_DOWN			.equ	1
+key_LEFT			.equ	2
+key_RIGHT		.equ	3
+
 ; #######################################################################################
 ; PROGRAM ENTRY POINT
 ; #######################################################################################
 
 .LIST
 .org 9327h
+
+	;HACK
+	call handle_input
+	ret
+
 
 	; prep environment
 	call RINDOFF         ; Turn off runindicator
@@ -99,7 +109,8 @@ game_loop:
 	call draw_apples
 	call BUFCOPY	;blit
 	
-	call move_snake ;handle logic
+	call move_snake
+	call check_collision
 	call handle_input ; handle input
 	
 	ld a,(stop_game) ; check if we finished
@@ -107,7 +118,7 @@ game_loop:
 	ret z
 	
 	ld de,30		; otherwise sleep for 30ms and loop
-	;call delay
+	call delay
 	
 	;ld a,20
 	;ld b,20
@@ -130,6 +141,19 @@ gen_apple:
 
 handle_input
 	; TODO
+	call _GetK
+	ld h,0
+	ld l,a
+	call _dispHL
+	
+	ld de,50
+	call delay
+	
+	jp handle_input
+	ret
+
+check_collision:
+	; TODO
 	ret
 
 ; #######################################################################################
@@ -142,34 +166,105 @@ move_snake:
 	;gen apples
 	
 	;find tail
-	ld de,(dir)
-	
-find_tail:
 	ld hl,snake
-	inc hl
-	ld a,(hl)
-	cp 255
-	jp nz, clear_tail
+	ld de,(snake_len)
 	
-	ld de,(dir)
+	add hl,de
+	add hl,de
+	
+	ld a,(hl)
+	inc hl
+	ld b,(hl)
+	
+	push hl
+	push de
+	call clr_pxl
+	pop de
+	pop hl
+	
+	ld d,h
+	ld e,l	; now both pointing at y-coor of the last elem
+	
+	dec de
+	dec de	; de is now 1 segm ahead
+	
+	ld a,(snake_len)
+	add a,a
+	ld b,a
 
-mv_north:
-mv_south:
-mv_east:
-mv_west:
+ms_cpy_loop:
+	ld a,(de)
+	ld (hl),a
+	dec hl
+	dec de
+	dec b
+	jp nz,ms_cpy_loop
+	
+	
 	ld hl,snake
 	ld a,(hl)
 	inc a
 	ld (hl),a
 	
 	ret
-
-clear_tail:
 	
+	; move in current dir
 	
+	ld a,(dir)
+	cp DIR_N
+	jp z,mv_north
+	cp DIR_S
+	jp z,mv_south
+	cp DIR_W
+	jp z,mv_west
+	cp DIR_E
+	jp z,mv_east
 	
-	
+mv_north:
+	ld hl,(snake)
+	inc hl
+	ld a,(hl)
+	inc a
+	cp scr_h
+	jp c, noob_north
+	ld a,0
+noob_north:  			; not out of bounds
+	ld (hl),a
 	ret
+	
+mv_south:
+	ld hl,(snake)
+	inc hl
+	ld a,(hl)
+	dec a
+	jp nc, noob_south	;>=0
+	ld a,scr_h-1
+noob_south:  			; not out of bounds
+	ld (hl),a
+	ret
+	
+mv_east:
+	ld hl,(snake)
+	ld a,(hl)
+	dec a
+	cp scr_w
+	jp nc, noob_east ; >=0
+	ld a,scr_w-1
+noob_east:  			; not out of bounds
+	ld (hl),a
+	ret
+
+mv_west:
+	ld hl,(snake)
+	ld a,(hl)
+	inc a
+	cp scr_w
+	jp c, noob_west
+	ld a,0
+noob_west:  			; not out of bounds
+	ld (hl),a
+	ret
+
 
 ; #######################################################################################
 ; delay: idle for a given number of cycles (given by de) in multiplicants of 0xffff
@@ -208,25 +303,21 @@ delay_loop:
 
 draw_snake:
 	ld hl, snake
-	ld c, snake_len_max
+	ld de, (snake_len)
 	
 ds_loop:
 	ld a,(hl)
 	inc hl
-	
-	cp 255
-	ret z
-	
 	ld b,(hl)
 	inc hl
 	
 	push hl
-	push bc
+	push de
 	call put_pxl
-	pop bc
+	pop de
 	pop hl
 	
-	dec c
+	dec e
 	jp nz, ds_loop
 	
 	ret
@@ -488,7 +579,7 @@ put_pxl:
 	ld hl, _vram
 	add hl,de
 	ld a,(hl)
-	xor c			; XOR
+	or c			; XOR
 	
 	ld (hl),a 	; put back the byte
 	ret
