@@ -73,13 +73,15 @@ menu:
 ; #######################################################################################
 
 start_game:
-	call draw_map
+	;call draw_map
 	
 	;generate apples
 	ld a,apple_cnt
+	ld hl,apples
 apple_loop:
 	push af
 	call gen_apple
+	inc hl
 	pop af
 	dec a
 	jp nz, apple_loop
@@ -96,7 +98,7 @@ cur_map:		.dw	0
 dir:			.db	DIR_E
 snake_len:	.db	3
 stop_game:	.db	0
-speed:		.dw	3000
+speed:		.dw	1000 ; 3000 = ca 1 fps
 game_loop:
 	; below is the main vgame loop
 	
@@ -145,13 +147,13 @@ draw_pxl_array:
 	pop hl
 	
 	dec e
-	jp nz, ds_loop
+	jp nz, draw_pxl_array
 	
 	ret
 
 draw_apples:
-	ld hl, snake
-	ld de, (snake_len)
+	ld hl, apples
+	ld de, (apple_cnt)
 	
 	call draw_pxl_array
 	
@@ -175,8 +177,14 @@ ck_coll_self:
 
 ; args: hl - addr to x coor of apple to be replaced
 gen_apple:
-	;TODO
 	; no need to clear old apple since snake head overwrites this
+	call gen_rnd_xy
+	
+	; TODO - check for collisions!
+	
+	ld (hl),a
+	inc hl
+	ld (hl),b
 	ret
 
 grow_segment
@@ -208,6 +216,7 @@ handle_input
 	jp z,kp_LEFT
 	cp key_RIGHT
 	jp z,kp_RIGHT
+	;TODO handle the Enter key! (for menu)
 	ret
 
 kp_UP:
@@ -399,20 +408,7 @@ draw_snake:
 	ld hl, snake
 	ld de, (snake_len)
 	
-ds_loop:
-	ld a,(hl)
-	inc hl
-	ld b,(hl)
-	inc hl
-	
-	push hl
-	push de
-	call put_pxl
-	pop de
-	pop hl
-	
-	dec e
-	jp nz, ds_loop
+	call draw_pxl_array
 	
 	ret
 
@@ -922,6 +918,7 @@ snake:
 	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255
 
 apples:
-	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255
+	.db 255,255, 255,255, 255,255, 255,255, 255,255,
+	.db 255,255, 255,255, 255,255, 255,255, 255,255
 
 .end
