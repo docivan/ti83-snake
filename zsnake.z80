@@ -29,6 +29,7 @@ _vram	.equ	8E29h ; video mem
 ; #######################################################################################
 
 snake_len_max	.equ	64
+apple_cnt		.equ	10
 scr_w 			.equ	96
 scr_h				.equ	64
 scr_w_b			.equ	scr_w/8
@@ -46,26 +47,196 @@ DIR_W				.equ	3
 .org 9327h
 
 	; prep environment
-	call    RINDOFF         ; Turn off runindicator
-	call    BUFCLR          ; Clear the graphbuf
-	call    BUFCOPY         ; Copy the graphbuf to the LCD
+	call RINDOFF         ; Turn off runindicator
+	call menu
+	ret
+
+; #######################################################################################
+; MENU
+; #######################################################################################
+
+menu:
+	; TODO
+	call BUFCLR          ; Clear the graphbuf
+	call BUFCOPY         ; Copy the graphbuf to the LCD
 	
-	call init_snake
-	
-main_loop:
-	;call menu
-	
-	call init_snake
+	call start_game
+	ret
+
+; #######################################################################################
+; START GAME
+; #######################################################################################
+
+start_game:
 	call draw_map
+	
+	;generate apples
+	ld a,apple_cnt
+apple_loop:
+	push af
+	call gen_apple
+	pop af
+	dec a
+	jp nz, apple_loop
+	
 	call BUFCOPY
-	
+	call game_loop
+	ret
+
+; #######################################################################################
+; GAME LOOP
+; #######################################################################################
+
+cur_map:		.dw	0
+dir:			.db	DIR_W
+snake_len:	.db	3
+stop_game:	.db	0
+game_loop:
 	; below is the main vgame loop
-	call draw_snake
 	
-	call move_snake
-	call handle_input
+	;draw everything first
+	call draw_snake
+	call draw_apples
+	call BUFCOPY	;blit
+	
+	call move_snake ;handle logic
+	call handle_input ; handle input
+	
+	ld a,(stop_game) ; check if we finished
+	cp 1
+	ret z
+	
+	ld de,30		; otherwise sleep for 30ms and loop
+	;call delay
+	
+	;ld a,20
+	;ld b,20
+	;call put_pxl
+	
+	jp game_loop
+	ret
+
+draw_apples:
+	;TODO
+	ret
+
+gen_apple:
+	;TODO
+	ret
+
+; #######################################################################################
+; HANDLE INPUT
+; #######################################################################################
+
+handle_input
+	; TODO
+	ret
+
+; #######################################################################################
+; MOVE SNAKE
+; #######################################################################################
+
+move_snake:
+	;TODO
+	;check eating apple
+	;gen apples
+	
+	;find tail
+	ld de,(dir)
+	
+find_tail:
+	ld hl,snake
+	inc hl
+	ld a,(hl)
+	cp 255
+	jp nz, clear_tail
+	
+	ld de,(dir)
+
+mv_north:
+mv_south:
+mv_east:
+mv_west:
+	ld hl,snake
+	ld a,(hl)
+	inc a
+	ld (hl),a
 	
 	ret
+
+clear_tail:
+	
+	
+	
+	
+	ret
+
+; #######################################################################################
+; delay: idle for a given number of cycles (given by de) in multiplicants of 0xffff
+;
+; input: delay de * 0xffff
+; returns nothing
+; #######################################################################################
+
+;6 MHz, ie 6 000 000 / s
+; 1ms = 1000 / s
+; thus need to perform 6000 cycles for 1 ms
+
+delay:
+	ld hl,249				; 24*249 = 5976 cycles + 29 for the outer = 6005c
+	
+delay_loop:
+	dec hl					; 6 cycles
+	ld a,h					; 4 cycles	; cp low byte
+	or l						; 4 cycles	; cmp with hi byte - if both not 0 - continue inner loop
+	jp nz, delay_loop		; 10 cycles
+	
+	dec de					;6c
+	ld a,d					;4c
+	or e						;4c
+	ret z						;5c
+	jp delay					;10c
+
+; thus 24c per inner loop + 29c for outer
+
+; #######################################################################################
+; draw_snake: draw snake
+;
+; no inputs
+; returns nothing
+; #######################################################################################
+
+draw_snake:
+	ld hl, snake
+	ld c, snake_len_max
+	
+ds_loop:
+	ld a,(hl)
+	inc hl
+	
+	cp 255
+	ret z
+	
+	ld b,(hl)
+	inc hl
+	
+	push hl
+	push bc
+	call put_pxl
+	pop bc
+	pop hl
+	
+	dec c
+	jp nz, ds_loop
+	
+	ret
+
+; #######################################################################################
+; draw_map: draw initial map
+;
+; no inputs
+; returns nothing
+; #######################################################################################
 
 dmloopvar: .db 48
 dmbytecnt: .db	3
@@ -83,13 +254,15 @@ dmloop:
 	ld a,(de)		;get current map byte
 	and b				;and mask
 	jp z,dmbit2		;if empty - go to next bit
-	ld (hl),11110000b	;draw
+	ld c,11110000b
+	call draw_tile
 dmbit2:
 	rr b				;shift to next bit in map mask byte
 	ld a,(de)		;get current map byte
 	and b				;and mask
 	jp z,dmloop		;if there is nothing to draw, continue with next 2 bits
-	ld c,00001111b	;otherwise load what to draw
+	ld c,00001111b
+	call draw_tile
 	ld a,(hl)		;load vram byte
 	or c				;apply it on top of already drawn mem
 	ld (hl),a		;cp to vram
@@ -104,52 +277,49 @@ dmnxtbyte:
 	
 	ld a,(dmbytecnt)
 	dec a
+	ld (dmbytecnt),a
 	jp nz,dmloop
 	
 	ld a,3
 	ld (dmbytecnt),a
 	
+	push af
 	push de
-	ld de,3*4
+	ld de,36
 	add hl,de
 	pop de
+	pop af
+	
 	jp dmloop		;continue
 
-handle_input
-	; TODO
+draw_tile
+	push bc
+	push de
+	push hl
+	
+	ld b,4
+	ld de,12
+
+dt_loop:
+	ld a,(hl)
+	or c
+	ld (hl),a
+	
+	add hl,de
+	dec b
+	jp nz, dt_loop
+	
+	pop hl
+	pop de
+	pop bc
 	ret
 
-move_snake:
-	;TODO
-	ret
-
-draw_snake:
-	;TODO
-	ld hl, snake_head
-	
-	ret
-
-init_snake:
-	ld hl, snake_head
-	
-	ld (hl),48	 ;x
-	inc hl
-	ld (hl),31 ;y
-	inc hl
-	
-	ld (hl),47	 ;x
-	inc hl
-	ld (hl),31 ;y
-	inc hl
-	
-	ld (hl),46	 ;x
-	inc hl
-	ld (hl),31 ;y
-	inc hl
-	
-	ret
-
-;puts in coords in (a,b)
+; #######################################################################################
+; gen_rnd_xy: generate random coords (a,) within screen limits
+;
+; no inputs
+; returns nothing
+; #######################################################################################
 gen_rnd_xy:
 	; gen y
 	ld a,scr_h-1
@@ -162,13 +332,6 @@ gen_rnd_xy:
 	pop bc
 	; done
 	ret
-	
-
-cur_map:	.dw	0
-
-pos_x:	.db	0
-pos_y:	.db	0
-dir:		.db 	0
 
 ; #######################################################################################
 ; TESTING FUNCS
@@ -546,15 +709,25 @@ bitmasks:
 ; assets
 
 lvl1_map: ;3x16 bytes
-	.db 255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
-	.db 255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,
-	.db 255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255
-
-; this will grow upwards towards the stack
-snake_head:	.dw 0
+	.db 11000000b, 00000000b, 00000011b
+	.db 10000000b, 00000000b, 00000001b
+	.db 00000000b, 00111100b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00111100b, 00000000b
+	.db 10000000b, 00000000b, 00000001b
+	.db 11000000b, 00000000b, 00000011b
 
 snake:
-	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
+	.db  48, 31,  47, 31,  46, 31, 255,255, 255,255, 255,255, 255,255, 255,255,
 	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
 	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
 	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
@@ -562,5 +735,8 @@ snake:
 	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
 	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
 	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255
+
+apples:
+	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255
 
 .end
