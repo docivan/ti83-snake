@@ -107,7 +107,7 @@ game_loop:
 	call BUFCOPY	;blit
 	
 	; handle collisions
-	call check_collision
+	call handle_collisions
 	
 	ld a,(stop_game) ; check if we finished
 	cp 1
@@ -128,12 +128,69 @@ gl_idle:
 	jp game_loop
 	ret
 
-draw_apples:
-	;TODO
+; #######################################################################################
+
+
+; hl - array ptr, de - nr of words (ie coords: (x,y) = 1)
+draw_pxl_array:
+	ld a,(hl)
+	inc hl
+	ld b,(hl)
+	inc hl
+	
+	push hl
+	push de
+	call put_pxl
+	pop de
+	pop hl
+	
+	dec e
+	jp nz, ds_loop
+	
 	ret
 
+draw_apples:
+	ld hl, snake
+	ld de, (snake_len)
+	
+	call draw_pxl_array
+	
+	ret
+
+handle_collisions:
+	; TODO
+	ret
+
+ck_coll_map:
+	; TODO
+	ret
+
+; ret hl - 0 = no coll, addr = x-coor of apple collided with 
+ck_coll_apples:
+	ret
+
+; ret: a - 0 = no coll; 1 = coll
+ck_coll_self:
+	ret
+
+; args: hl - addr to x coor of apple to be replaced
 gen_apple:
 	;TODO
+	; no need to clear old apple since snake head overwrites this
+	ret
+
+grow_segment
+	; TODO
+	ret
+
+check_collision:
+	; TODO
+		;TODO
+	;check eating apple
+	;gen apples
+	
+	; apples
+	; 
 	ret
 
 ; #######################################################################################
@@ -154,31 +211,41 @@ handle_input
 	ret
 
 kp_UP:
+	ld a,(dir)
+	cp DIR_S
+	ret z
+	
 	ld a, DIR_N
 	ld (dir), a
 	ret
+	
 kp_DOWN:
+	ld a,(dir)
+	cp DIR_N
+	ret z
+	
 	ld a, DIR_S
 	ld (dir), a
 	ret
 kp_LEFT:
+	ld a,(dir)
+	cp DIR_E
+	ret z
+	
 	ld a, DIR_W
 	ld (dir), a
 	ret
 kp_RIGHT:
+	ld a,(dir)
+	cp DIR_W
+	ret z
+	
 	ld a, DIR_E
 	ld (dir), a
 	ret
 
-check_collision:
-	; TODO
-		;TODO
-	;check eating apple
-	;gen apples
-	ret
-
 ; #######################################################################################
-; MOVE SNAKE
+; MOVE SNAKE functions
 ; #######################################################################################
 
 move_snake:
