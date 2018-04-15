@@ -51,11 +51,6 @@ key_RIGHT		.equ	3
 .LIST
 .org 9327h
 
-	;HACK
-	call handle_input
-	ret
-
-
 	; prep environment
 	call RINDOFF         ; Turn off runindicator
 	call menu
@@ -98,31 +93,37 @@ apple_loop:
 ; #######################################################################################
 
 cur_map:		.dw	0
-dir:			.db	DIR_W
+dir:			.db	DIR_E
 snake_len:	.db	3
 stop_game:	.db	0
+speed:		.dw	3000
 game_loop:
 	; below is the main vgame loop
 	
-	;draw everything first
+	;move + draw
+	call move_snake
 	call draw_snake
 	call draw_apples
 	call BUFCOPY	;blit
 	
-	call move_snake
+	; handle collisions
 	call check_collision
-	call handle_input ; handle input
 	
 	ld a,(stop_game) ; check if we finished
 	cp 1
 	ret z
+	; TODO use the snake segments for an explosion!
 	
-	ld de,30		; otherwise sleep for 30ms and loop
-	call delay
-	
-	;ld a,20
-	;ld b,20
-	;call put_pxl
+	;idle while getting input
+	ld hl,(speed)		; otherwise sleep for 30ms and loop
+gl_idle:
+	push hl
+	call handle_input
+	pop hl
+	dec hl
+	ld a,h
+	or l
+	jp nz, gl_idle
 	
 	jp game_loop
 	ret
@@ -140,20 +141,40 @@ gen_apple:
 ; #######################################################################################
 
 handle_input
-	; TODO
 	call _GetK
-	ld h,0
-	ld l,a
-	call _dispHL
 	
-	ld de,50
-	call delay
-	
-	jp handle_input
+	cp key_UP
+	jp z,kp_UP
+	cp key_DOWN
+	jp z,kp_DOWN
+	cp key_LEFT
+	jp z,kp_LEFT
+	cp key_RIGHT
+	jp z,kp_RIGHT
+	ret
+
+kp_UP:
+	ld a, DIR_N
+	ld (dir), a
+	ret
+kp_DOWN:
+	ld a, DIR_S
+	ld (dir), a
+	ret
+kp_LEFT:
+	ld a, DIR_W
+	ld (dir), a
+	ret
+kp_RIGHT:
+	ld a, DIR_E
+	ld (dir), a
 	ret
 
 check_collision:
 	; TODO
+		;TODO
+	;check eating apple
+	;gen apples
 	ret
 
 ; #######################################################################################
@@ -161,13 +182,16 @@ check_collision:
 ; #######################################################################################
 
 move_snake:
-	;TODO
-	;check eating apple
-	;gen apples
+	call clear_tail
+	call move_body
+	call move_head
 	
+
+clear_tail:
 	;find tail
 	ld hl,snake
 	ld de,(snake_len)
+	dec de
 	
 	add hl,de
 	add hl,de
@@ -176,12 +200,19 @@ move_snake:
 	inc hl
 	ld b,(hl)
 	
-	push hl
-	push de
 	call clr_pxl
-	pop de
-	pop hl
+	ret
+
+move_body:
+	ld hl,snake
+	ld de,(snake_len)
+	dec de
 	
+	add hl,de
+	add hl,de
+	inc hl
+	
+	; now copy
 	ld d,h
 	ld e,l	; now both pointing at y-coor of the last elem
 	
@@ -189,6 +220,7 @@ move_snake:
 	dec de	; de is now 1 segm ahead
 	
 	ld a,(snake_len)
+	dec a
 	add a,a
 	ld b,a
 
@@ -200,16 +232,12 @@ ms_cpy_loop:
 	dec b
 	jp nz,ms_cpy_loop
 	
-	
-	ld hl,snake
-	ld a,(hl)
-	inc a
-	ld (hl),a
-	
 	ret
 	
-	; move in current dir
+	; 00 00 00
 	
+	; move in current dir
+move_head:
 	ld a,(dir)
 	cp DIR_N
 	jp z,mv_north
@@ -220,48 +248,47 @@ ms_cpy_loop:
 	cp DIR_E
 	jp z,mv_east
 	
-mv_north:
-	ld hl,(snake)
+mv_south:
+	ld hl,snake
 	inc hl
 	ld a,(hl)
 	inc a
 	cp scr_h
-	jp c, noob_north
+	jp c, noob_south
 	ld a,0
-noob_north:  			; not out of bounds
-	ld (hl),a
-	ret
-	
-mv_south:
-	ld hl,(snake)
-	inc hl
-	ld a,(hl)
-	dec a
-	jp nc, noob_south	;>=0
-	ld a,scr_h-1
 noob_south:  			; not out of bounds
 	ld (hl),a
 	ret
 	
-mv_east:
-	ld hl,(snake)
+mv_north:
+	ld hl,snake
+	inc hl
 	ld a,(hl)
 	dec a
-	cp scr_w
-	jp nc, noob_east ; >=0
+	jp p, noob_north	;>=0
+	ld a,scr_h-1
+noob_north:  			; not out of bounds
+	ld (hl),a
+	ret
+	
+mv_west:
+	ld hl,snake
+	ld a,(hl)
+	dec a
+	jp p, noob_west ; >=0
 	ld a,scr_w-1
-noob_east:  			; not out of bounds
+noob_west:  			; not out of bounds
 	ld (hl),a
 	ret
 
-mv_west:
-	ld hl,(snake)
+mv_east:
+	ld hl,snake
 	ld a,(hl)
 	inc a
 	cp scr_w
-	jp c, noob_west
+	jp c, noob_east
 	ld a,0
-noob_west:  			; not out of bounds
+noob_east:  			; not out of bounds
 	ld (hl),a
 	ret
 
