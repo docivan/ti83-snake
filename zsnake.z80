@@ -73,7 +73,18 @@ menu:
 ; #######################################################################################
 
 start_game:
-	;call draw_map
+	call draw_map
+	
+	ld a,50
+	ld b,1
+	call get_pxl
+	
+	ld h,0
+	ld l,a
+	
+	call _dispHL
+	
+	;ret ;HACK
 	
 	;generate apples
 	ld a,apple_cnt
@@ -83,6 +94,7 @@ apple_loop:
 	call gen_apple
 	inc hl
 	pop af
+	
 	dec a
 	jp nz, apple_loop
 	
@@ -153,35 +165,57 @@ draw_pxl_array:
 
 draw_apples:
 	ld hl, apples
-	ld de, (apple_cnt)
+	ld e, (apple_cnt)
 	
 	call draw_pxl_array
 	
 	ret
 
 handle_collisions:
+	; collision = if pxl head is on is already filled
+	ld hl,snake
+	ld a,(hl)
+	inc hl
+	ld b,(hl)
+	
+	;call get_pxl
+	;or a
+	ret z
+	
+	; if apple = eat + elongate
+	
+	;TODO
+	
+	; else = die
+	
 	; TODO
-	ret
-
-ck_coll_map:
-	; TODO
-	ret
-
-; ret hl - 0 = no coll, addr = x-coor of apple collided with 
-ck_coll_apples:
-	ret
-
-; ret: a - 0 = no coll; 1 = coll
-ck_coll_self:
+	
 	ret
 
 ; args: hl - addr to x coor of apple to be replaced
 gen_apple:
 	; no need to clear old apple since snake head overwrites this
+	push hl
+	push af
+	push bc
+	
+ga_loop:
+	pop bc
+	pop af
+	
 	call gen_rnd_xy
 	
-	; TODO - check for collisions!
+	; check coords in a,b for collisions!
+	push af
+	push bc
 	
+	call get_pxl
+	jp nz, ga_loop
+	
+	pop bc
+	pop af
+	
+	pop hl
 	ld (hl),a
 	inc hl
 	ld (hl),b
@@ -496,7 +530,7 @@ dt_loop:
 	ret
 
 ; #######################################################################################
-; gen_rnd_xy: generate random coords (a,) within screen limits
+; gen_rnd_xy: generate random coords (a,b) within screen limits
 ;
 ; no inputs
 ; returns nothing
@@ -702,10 +736,22 @@ clr_pxl:
 	ret
 
 ; get pixel val from (a,b)
-; returns nothing
+; returns a
 
 get_pxl:
 	; TODO
+	call get_vram_addr
+	
+	ld hl, bitmasks
+	ld b,0
+	add hl,bc
+	ld c,(hl) ; bitmask is now stored in c
+	
+	ld hl, _vram
+	add hl,de
+	ld a,(hl)
+	and c			; AND
+	
 	ret
 
 ; #######################################################################################
@@ -859,7 +905,7 @@ gen_rnd_loop:
 	jp nc,gen_rnd_loop ; if result < 0, continue
 	
 	add a,e			; add max_val to result to make it positive
-	ld e,a			; store it in a
+	ld e,a			; store it in e
 	
 	; this is to make this function inclusive of max_val
 	ld a,r			; get mem refresh register
@@ -918,7 +964,10 @@ snake:
 	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255
 
 apples:
-	.db 255,255, 255,255, 255,255, 255,255, 255,255,
-	.db 255,255, 255,255, 255,255, 255,255, 255,255
+	.db 10,10, 15,10, 20,10, 25,10, 30,10,
+	.db 35,10, 40,10, 45,10, 50,10, 55,10
+	
+;	.db 255,255, 255,255, 255,255, 255,255, 255,255,
+;	.db 255,255, 255,255, 255,255, 255,255, 255,255
 
 .end
