@@ -126,19 +126,19 @@ game_loop:
 	
 	ld a,(do_elongate)
 	and a
-	jp z, normal_idle ; has not grown this turn
+	jp nz, gl_short_idle
 	
-	;otherwise shorten idling because we have used cpu resources to grow
-	;xor a
-	;ld (do_elongate),a
+	ld hl, (speed)
+	jp gl_cont
 	
-	ld hl,255
-	;jp gl_idle
+gl_short_idle:
+	ld h, 0
+	ld l, 1
+	
 
-normal_idle:
-	ld hl,(wait_timer)
-	ld (hl),speed
-
+gl_cont:
+	ld (wait_timer), hl
+	
 	;move
 	call move_snake
 	
