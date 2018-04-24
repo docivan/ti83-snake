@@ -8,25 +8,25 @@
 ; #######################################################################################
 
 ; addresses
-_vram			.equ		8E29h ; video mem
-_OP1			.equ		8039h ; addr of OP1 variable used by TI83 internally
+_vram				.equ		8E29h ; video mem
+_OP1				.equ		8039h ; addr of OP1 variable used by TI83 internally
 
 ; functions
-_blitBuf		.equ		5164h	; Copy the graph backup to the screen
-_bufClr		.equ		515Bh	; Clear the graph backup
+_blitBuf			.equ		5164h	; Copy the graph backup to the screen
+_bufClr			.equ		515Bh	; Clear the graph backup
 
-_drawText	.equ		4781h ; draw small text
-_sGrFlags	.equ		20		; IY OFFSET VALUE
-_txtWrToBuf	.equ	7	; bit offset for 
-_penCol		.equ		8252h
-_penRow		.equ		8253h
+_drawText		.equ		4781h ; draw small text
+_sGrFlags		.equ		20		; IY OFFSET VALUE
+_txtWrToBuf		.equ		7	; bit offset for 
+_penCol			.equ		8252h
+_penRow			.equ		8253h
 
-_runIndOff	.equ	 	4795h	; Turn off runindicator
+_runIndOff		.equ	 	4795h	; Turn off runindicator
 
-_getKey		.equ		4A18h ; get pressed key
-_textMode	.equ		47A1h ; switch to Home aka text mode
+_getKey			.equ		4A18h ; get pressed key
+_textMode		.equ		47A1h ; switch to Home aka text mode
 
-_rndFloat	.equ		50B6h ; generate random float
+_rndFloat		.equ		50B6h ; generate random float
 
 ; #######################################################################################
 ; USER DEFINED CONSTANTS
@@ -36,9 +36,13 @@ scr_w 			.equ	96
 scr_h				.equ	64
 scr_w_b			.equ	scr_w/8
 
+score_pos_x		.equ	scr_w - 12 - 1 ; 4 pxl per number + 1 padding
+score_area_x	.equ	score_pos_x - 2 ; score area x starts here, 2 pxl extra padding
+score_area_y	.equ	8 ; score area y ends here
+
 snake_len_max	.equ	64
 apple_cnt		.equ	10
-speed_inc		.equ	300
+speed_inc		.equ	50
 
 DIR_N				.equ	0
 DIR_E				.equ	1
@@ -113,11 +117,28 @@ dir:			.db	DIR_E
 snake_len:	.db	3
 stop_game:	.db	0
 speed:		.dw	1000 ; 3000 = ca 1 fps
-score:		.db	0
+score_str:	.db	"000",0
+
+wait_timer: .dw	1000
 
 game_loop:
 	; below is the main vgame loop
 	
+	ld a,(do_elongate)
+	and a
+	jp z, normal_idle ; has not grown this turn
+	
+	;otherwise shorten idling because we have used cpu resources to grow
+	;xor a
+	;ld (do_elongate),a
+	
+	ld hl,255
+	;jp gl_idle
+
+normal_idle:
+	ld hl,(wait_timer)
+	ld (hl),speed
+
 	;move
 	call move_snake
 	
@@ -135,7 +156,7 @@ game_loop:
 	; TODO use the snake segments for an explosion!
 	
 	;idle while getting input
-	ld hl,(speed)		; otherwise sleep for 30ms and loop
+	ld hl,(wait_timer)		; otherwise sleep for 30ms and loop
 gl_idle:
 	push hl
 	call handle_input
@@ -150,33 +171,30 @@ gl_idle:
 
 ; #######################################################################################
 
-score_string:
-	.db "256",0
-
 prep_score:
 	; draw 1pxl border
 	
-	ld d,scr_w - 12 - 2
+	ld d,score_area_x
 	ld e,0
 
 ps_h_line_loop:
 	ld a,d
 	ld b,e
 	push de
-	call clr_pxl
+	call put_pxl
 	pop de
 	
 	ld a,d
 	ld b,e
-	sub 2
+	add a,14
 	
 	push de
-	call clr_pxl
+	call put_pxl
 	pop de
 	
 	inc e
 	ld a,e
-	cp 7
+	cp score_area_y
 	jp nz, ps_h_line_loop
 	
 	inc d
@@ -186,7 +204,7 @@ ps_v_line_loop:
 	ld a,d
 	ld b,e
 	push de
-	call clr_pxl
+	call put_pxl
 	pop de
 	inc d
 	ld a,d
@@ -196,17 +214,39 @@ ps_v_line_loop:
 	ret
 
 draw_score
-	ld a,scr_w - 12 - 1
+	ld a,score_pos_x
 	ld (_penCol),a
 	xor a
 	ld (_penRow),a
 	set _txtWrToBuf, (iy + _sGrFlags) 
 	
-	ld hl,score_string
+	ld hl,score_str
 	call _drawText
 	ret
 
 inc_score:
+	ld hl, score_str+2
+	ld b,3
+
+isc_loop:
+	ld a,(hl)
+	inc a
+	cp 3ah
+	jp nz, is_store_and_draw_done
+	
+	ld a, 30h ; ascii for '0'
+	ld (hl),a
+	dec hl
+	dec b
+	jp z,is_draw_done ; if we have gone through all 3 numbers, return - this happens when score >999
+							; => rollover to 000 gracefully
+	jp isc_loop
+	
+
+is_store_and_draw_done:
+	ld (hl),a
+is_draw_done:
+	call draw_score
 	ret
 
 ; #######################################################################################
@@ -331,14 +371,27 @@ ga_loop:
 	
 	call gen_rnd_xy
 	
-	; check coords in a,b for collisions!
 	ld d,a
 	ld e,b
+	
+	; check that a,b is not within score area
+	cp score_area_x
+	jp nc, ga_loop ; x >= score_area_x
+	
+	ld a,b
+	cp score_area_y+1
+	jp c, ga_loop ; y < (score_area_y+1)
+	
+	ld a,d
+	
+	; check coords in a,b for collisions!
 	push de
 	call get_pxl
 	pop de
 	
 	jp nz, ga_loop
+	
+	
 	
 	pop hl
 	ld (hl),d
@@ -370,9 +423,12 @@ grow:
 	
 	ld hl,do_elongate
 	inc (hl)
-
+	
+	; increase score
+	call inc_score
+	
+	;finally, increase speed
 grow_speed:
-	;increase speed
 	ld hl,(speed)
 	ld de,speed_inc
 	or a
@@ -467,7 +523,7 @@ ms_move:
 	
 	; if have grown...
 	; not growing any more
-	dec a
+	xor a
 	ld (do_elongate),a
 	
 	; increase length variable
@@ -1037,8 +1093,8 @@ lvl1_icon:
 
 ; LVL 1 - map
 lvl1_map: ;3x16 bytes
-	.db 11000000b, 00000000b, 00001111b
-	.db 10000000b, 00000000b, 00001111b
+	.db 11000000b, 00000000b, 00000000b
+	.db 10000000b, 00000000b, 00000000b
 	.db 00000000b, 00111100b, 00000000b
 	.db 00000000b, 00000000b, 00000000b
 	.db 00000000b, 00000000b, 00000000b
