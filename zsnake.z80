@@ -2,8 +2,6 @@
 #define equ .equ
 #define EQU .equ
 #define end .end
-;#include "ti83asm.inc"
-;#include "tokens.inc"
 
 ; #######################################################################################
 ; SYSTEM CALLS AND ADDR
@@ -16,6 +14,12 @@ _OP1			.equ		8039h ; addr of OP1 variable used by TI83 internally
 ; functions
 _blitBuf		.equ		5164h	; Copy the graph backup to the screen
 _bufClr		.equ		515Bh	; Clear the graph backup
+
+_drawText	.equ		4781h ; draw small text
+_sGrFlags	.equ		20		; IY OFFSET VALUE
+_txtWrToBuf	.equ	7	; bit offset for 
+_penCol		.equ		8252h
+_penRow		.equ		8253h
 
 _runIndOff	.equ	 	4795h	; Turn off runindicator
 
@@ -78,6 +82,7 @@ menu:
 
 start_game:
 	call draw_map
+	call prep_score
 	
 	;generate apples
 	ld a,apple_cnt
@@ -91,7 +96,11 @@ apple_loop:
 	dec a
 	jp nz, apple_loop
 	
+	call draw_apples
+	call draw_score
+	
 	call _blitBuf
+	
 	call game_loop
 	ret
 
@@ -104,6 +113,8 @@ dir:			.db	DIR_E
 snake_len:	.db	3
 stop_game:	.db	0
 speed:		.dw	1000 ; 3000 = ca 1 fps
+score:		.db	0
+
 game_loop:
 	; below is the main vgame loop
 	
@@ -114,7 +125,8 @@ game_loop:
 	call handle_collisions
 	
 	call draw_snake
-	call draw_apples
+	;call draw_apples - this is only done when new apples appear
+	
 	call _blitBuf	;blit
 	
 	ld a,(stop_game) ; check if we finished
@@ -138,8 +150,71 @@ gl_idle:
 
 ; #######################################################################################
 
+score_string:
+	.db "256",0
 
-; hl - array ptr, de - nr of words (ie coords: (x,y) = 1)
+prep_score:
+	; draw 1pxl border
+	
+	ld d,scr_w - 12 - 2
+	ld e,0
+
+ps_h_line_loop:
+	ld a,d
+	ld b,e
+	push de
+	call clr_pxl
+	pop de
+	
+	ld a,d
+	ld b,e
+	sub 2
+	
+	push de
+	call clr_pxl
+	pop de
+	
+	inc e
+	ld a,e
+	cp 7
+	jp nz, ps_h_line_loop
+	
+	inc d
+	dec e
+
+ps_v_line_loop:
+	ld a,d
+	ld b,e
+	push de
+	call clr_pxl
+	pop de
+	inc d
+	ld a,d
+	cp scr_w-1
+	jp nz, ps_v_line_loop
+	
+	ret
+
+draw_score
+	ld a,scr_w - 12 - 1
+	ld (_penCol),a
+	xor a
+	ld (_penRow),a
+	set _txtWrToBuf, (iy + _sGrFlags) 
+	
+	ld hl,score_string
+	call _drawText
+	ret
+
+inc_score:
+	ret
+
+; #######################################################################################
+; draw_pxl_array: draw an array of 'e' pixels with coords starting at addr in 'hl'
+;
+; args: hl - array ptr, e - nr of words (ie coords: (x,y) = 1)
+; #######################################################################################
+
 draw_pxl_array:
 	ld a,(hl)
 	inc hl
@@ -157,6 +232,11 @@ draw_pxl_array:
 	
 	ret
 
+; #######################################################################################
+; draw_apples: draw all apples
+; no args
+; #######################################################################################
+
 draw_apples:
 	ld hl, apples
 	ld e, (apple_cnt)
@@ -164,6 +244,11 @@ draw_apples:
 	call draw_pxl_array
 	
 	ret
+
+; #######################################################################################
+; handle_collisions: check whether we have hit a wall, ourselves or an apple
+; no args
+; #######################################################################################
 
 handle_collisions:
 	; collision = if pxl head is on is already filled
@@ -192,8 +277,12 @@ hc_die: ; else = die
 	ld (hl), 1
 	ret
 
+; #######################################################################################
+; is_an_apple: check if there is an apple at position (d,e)
 ; returns a=1 if apple hit with hl pointing at x coor of that apple
-; return a=0 if apple was not hit
+; returns a=0 if apple was not hit
+; #######################################################################################
+
 is_an_apple:
 	ld hl,apples
 	ld b,apple_cnt
@@ -226,7 +315,14 @@ iaa_not_found:
 	ld a,0
 	ret
 
+
+; #######################################################################################
+; gen_apple: find random (x,y) coordinates that are not occupied by anything else, 
+; 					then write these coords to mem addr hl (x) and hl+1 (y)
+; 
 ; args: hl - addr to x coor of apple to be replaced
+; #######################################################################################
+
 gen_apple:
 	; no need to clear old apple since snake head overwrites this
 	push hl
@@ -250,10 +346,32 @@ ga_loop:
 	ld (hl),e
 	ret
 
+; #######################################################################################
+; grow: grow snake with one segment after eting an apple, generate a new apple
+;
+; args: hl = location of snake head / apple
+; #######################################################################################
+
 grow:
-	;eat = replace apple with x @ hl - TODO
-	;elongate - TODO
+	;eat = replace apple with x @ hl
+	;no need to clear old apple since snake head overwrites this
+	call gen_apple
 	
+	; draw it
+	ld a,d
+	ld b,e
+	call put_pxl
+	
+	;elongate
+	;check if at max length
+	ld a,(snake_len)
+	cp snake_len_max
+	jp nc, grow_speed
+	
+	ld hl,do_elongate
+	inc (hl)
+
+grow_speed:
 	;increase speed
 	ld hl,(speed)
 	ld de,speed_inc
@@ -326,11 +444,64 @@ kp_RIGHT:
 ; MOVE SNAKE functions
 ; #######################################################################################
 
+do_elongate:	.db	0
+
 move_snake:
+	ld a,(do_elongate)
+	cp 1
+	jp nz, ms_not_grown
+	
+	call grow_element
+	jp ms_move
+	
+ms_not_grown: ; only if not growing
 	call clear_tail
+	
+ms_move:
 	call move_body
 	call move_head
 	
+	ld a,(do_elongate)
+	cp 1
+	ret nz
+	
+	; if have grown...
+	; not growing any more
+	dec a
+	ld (do_elongate),a
+	
+	; increase length variable
+	ld hl, snake_len
+	inc (hl)
+	
+	ret
+
+grow_element:
+	
+	; copy last elem to len+1
+	
+	ld hl,snake
+	ld de,(snake_len)
+	
+	add hl,de
+	add hl,de
+	
+	ld d,h
+	ld e,l
+	
+	dec de
+	dec de
+	
+	ld a,(de)
+	ld (hl),a
+	
+	inc hl
+	inc de
+	
+	ld a,(de)
+	ld (hl),a
+	
+	ret
 
 clear_tail:
 	;find tail
@@ -836,26 +1007,7 @@ bitmasks:
 	.db 00000010b ;6
 	.db 00000001b ;7
 
-; assets
-
-lvl1_map: ;3x16 bytes
-	.db 11000000b, 00000000b, 00000011b
-	.db 10000000b, 00000000b, 00000001b
-	.db 00000000b, 00111100b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00000000b, 00000000b
-	.db 00000000b, 00111100b, 00000000b
-	.db 10000000b, 00000000b, 00000001b
-	.db 11000000b, 00000000b, 00000011b
-
+; stores location of all snake segments
 snake:
 	.db  48, 31,  47, 31,  46, 31, 255,255, 255,255, 255,255, 255,255, 255,255,
 	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
@@ -866,11 +1018,40 @@ snake:
 	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
 	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255
 
+; stores location of all apples
 apples:
 	.db 10,10, 15,10, 20,10, 25,10, 30,10,
 	.db 35,10, 40,10, 45,10, 50,10, 55,10
-	
-;	.db 255,255, 255,255, 255,255, 255,255, 255,255,
-;	.db 255,255, 255,255, 255,255, 255,255, 255,255
+
+; assets
+; LVL 1 - icon
+lvl1_icon:
+	.db 10000001b,
+	.db 00011000b,
+	.db 00000000b,
+	.db 00000000b,
+	.db 00000000b,
+	.db 00000000b,
+	.db 00011000b,
+	.db 10000001b
+
+; LVL 1 - map
+lvl1_map: ;3x16 bytes
+	.db 11000000b, 00000000b, 00001111b
+	.db 10000000b, 00000000b, 00001111b
+	.db 00000000b, 00111100b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00000000b, 00000000b
+	.db 00000000b, 00111100b, 00000000b
+	.db 10000000b, 00000000b, 00000001b
+	.db 11000000b, 00000000b, 00000011b
 
 .end
