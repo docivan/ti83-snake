@@ -2,27 +2,27 @@
 #define equ .equ
 #define EQU .equ
 #define end .end
-#include "ti83asm.inc"
-#include "tokens.inc"
+;#include "ti83asm.inc"
+;#include "tokens.inc"
 
 ; #######################################################################################
-; CONSTANTS
+; SYSTEM CALLS AND ADDR
 ; #######################################################################################
 
-WAITKEY .equ     4CFEh  ; Wait for a key and read
-BUFCLR	.equ	 515Bh	; Clear the graph backup
-BUFCOPY .equ	 5164h	; Copy the graph backup to the screen
-RINDOFF .equ	 4795h	; Turn off runindicator
-PRINTHL .equ	 4709h	; Print HL in dec. on the screen
-OP2TOP1 .equ	 41C2h	; Move OP2 to OP1
-CONVOP1 .equ	 4EFCh	; Convert fp value in OP1 to a 2 byte hex
-READKEY .equ	 4A18h	; Read key and place it in OP2 as a fp value
-GOHOME	.equ	 47A1h	; Go to home screen (finish gfx program)
-CLRTSHD .equ	 4765h	; Clear text shadow
-HOMEUP	.equ	 4775h	; Place cursor at home
-STRING	.equ	 470Dh	; Print 0 terminated string to screen (hl->string)
+; addresses
+_vram			.equ		8E29h ; video mem
+_OP1			.equ		8039h ; addr of OP1 variable used by TI83 internally
 
-_vram	.equ	8E29h ; video mem
+; functions
+_blitBuf		.equ		5164h	; Copy the graph backup to the screen
+_bufClr		.equ		515Bh	; Clear the graph backup
+
+_runIndOff	.equ	 	4795h	; Turn off runindicator
+
+_getKey		.equ		4A18h ; get pressed key
+_textMode	.equ		47A1h ; switch to Home aka text mode
+
+_rndFloat	.equ		50B6h ; generate random float
 
 ; #######################################################################################
 ; USER DEFINED CONSTANTS
@@ -54,7 +54,7 @@ key_RIGHT		.equ	3
 .org 9327h
 
 	; prep environment
-	call RINDOFF         ; Turn off runindicator
+	call _runIndOff         ; Turn off runindicator
 	call menu
 	ret
 
@@ -64,12 +64,12 @@ key_RIGHT		.equ	3
 
 menu:
 	; TODO
-	call BUFCLR          ; Clear the graphbuf
-	call BUFCOPY         ; Copy the graphbuf to the LCD
+	call _bufClr          ; Clear the graphbuf
+	call _blitBuf         ; Copy the graphbuf to the LCD
 	
 	call start_game
 	
-	call GOHOME
+	call _textMode
 	ret
 
 ; #######################################################################################
@@ -91,7 +91,7 @@ apple_loop:
 	dec a
 	jp nz, apple_loop
 	
-	call BUFCOPY
+	call _blitBuf
 	call game_loop
 	ret
 
@@ -115,7 +115,7 @@ game_loop:
 	
 	call draw_snake
 	call draw_apples
-	call BUFCOPY	;blit
+	call _blitBuf	;blit
 	
 	ld a,(stop_game) ; check if we finished
 	cp 1
@@ -275,7 +275,7 @@ grow_sp_inc:
 ; #######################################################################################
 
 handle_input
-	call _GetK
+	call _getKey
 	
 	cp key_UP
 	jp z,kp_UP
@@ -585,139 +585,6 @@ gen_rnd_xy:
 	ret
 
 ; #######################################################################################
-; TESTING FUNCS
-; #######################################################################################
-
-test_pxl:
-	ld hl,_vram
-	ld c,12
-	ld b,0
-	add hl,bc
-	ld (hl), 10101010b
-	;call BUFCOPY
-	
-	ld de,12*20
-	ld c,0
-	;call put_pxl
-	
-	ld de,12*20
-	ld c,2
-	;call put_pxl
-	
-	ld de,12*20
-	ld c,4
-	;call put_pxl
-	
-	ld de,12*20
-	ld c,6
-	;call put_pxl
-	
-	ld a,47
-	ld b,31
-	call put_pxl
-	
-	ld a,0
-	ld b,1
-	call clr_pxl
-	
-	ld a,2
-	ld b,1
-	call clr_pxl
-	
-	call BUFCOPY
-	ret
-
-test_mul:
-; mul a*b = hl
-; kills de, hl, ab
-; result in hl
-	ld a,12
-	ld b,4
-	call mul
-	call _dispHL
-	
-	ld a,4
-	ld b,12
-	call mul
-	call _dispHL
-	
-	ld a,0
-	ld b,12
-	call mul
-	call _dispHL
-	
-	ld a,12
-	ld b,0
-	call mul
-	call _dispHL
-	ret
-
-test_div:
-	ld d,255
-	ld e,2
-	call div
-	ld h,0
-	ld l,a
-	push bc
-	call _dispHL
-	pop bc
-	ld h,0
-	ld l,b
-	call _dispHL
-	
-	ld d,15
-	ld e,0
-	call div
-	ld h,0
-	ld l,a
-	push bc
-	call _dispHL
-	pop bc
-	ld h,0
-	ld l,b
-	call _dispHL
-	ret
-
-test_div_unsafe:
-	ld a,15
-	ld b,5
-	call div_unsafe
-	ld h,0
-	ld l,d
-	push de
-	call _dispHL
-	pop de
-	ld h,0
-	ld l,e
-	call _dispHL
-	
-	ld a,15
-	ld b,6
-	call div_unsafe
-	ld h,0
-	ld l,d
-	push de
-	call _dispHL
-	pop de
-	ld h,0
-	ld l,e
-	call _dispHL
-	
-	; floating division
-	ld a,5
-	ld b,15
-	call div_unsafe
-	ld h,0
-	ld l,d
-	push de
-	call _dispHL
-	pop de
-	ld h,0
-	ld l,e
-	call _dispHL
-	ret
-
-; #######################################################################################
 ; PIXEL MANIPULATION
 ; #######################################################################################
 
@@ -933,8 +800,8 @@ div_loop:
 gen_rnd:
 	ld e,a
 	push de			; save parsed params
-	call _RANDOM	; call internal routine
-   ld a,(OP1+6)	; get the random nr stored in (OP1 + 6)
+	call _rndFloat	; call internal routine
+   ld a,(_OP1+6)	; get the random nr stored in (OP1 + 6)
    pop de 			; get parsed params back
 gen_rnd_loop:
 	sub e				; a-e
