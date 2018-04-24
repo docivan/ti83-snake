@@ -28,11 +28,13 @@ _vram	.equ	8E29h ; video mem
 ; USER DEFINED CONSTANTS
 ; #######################################################################################
 
-snake_len_max	.equ	64
-apple_cnt		.equ	10
 scr_w 			.equ	96
 scr_h				.equ	64
 scr_w_b			.equ	scr_w/8
+
+snake_len_max	.equ	64
+apple_cnt		.equ	10
+speed_inc		.equ	300
 
 DIR_N				.equ	0
 DIR_E				.equ	1
@@ -66,6 +68,8 @@ menu:
 	call BUFCOPY         ; Copy the graphbuf to the LCD
 	
 	call start_game
+	
+	call GOHOME
 	ret
 
 ; #######################################################################################
@@ -74,17 +78,6 @@ menu:
 
 start_game:
 	call draw_map
-	
-	ld a,50
-	ld b,1
-	call get_pxl
-	
-	ld h,0
-	ld l,a
-	
-	call _dispHL
-	
-	;ret ;HACK
 	
 	;generate apples
 	ld a,apple_cnt
@@ -114,14 +107,15 @@ speed:		.dw	1000 ; 3000 = ca 1 fps
 game_loop:
 	; below is the main vgame loop
 	
-	;move + draw
+	;move
 	call move_snake
-	call draw_snake
-	call draw_apples
-	call BUFCOPY	;blit
 	
 	; handle collisions
 	call handle_collisions
+	
+	call draw_snake
+	call draw_apples
+	call BUFCOPY	;blit
 	
 	ld a,(stop_game) ; check if we finished
 	cp 1
@@ -178,61 +172,102 @@ handle_collisions:
 	inc hl
 	ld b,(hl)
 	
-	;call get_pxl
-	;or a
-	ret z
+	ld d,a
+	ld e,b
+	push de
+	call get_pxl
+	pop de
+	
+	ret z ; no collisions
 	
 	; if apple = eat + elongate
+	call is_an_apple
+	cp 1
+	jp nz, hc_die
+	call grow
+	ret
 	
-	;TODO
+hc_die: ; else = die
+	ld hl,stop_game
+	ld (hl), 1
+	ret
+
+; returns a=1 if apple hit with hl pointing at x coor of that apple
+; return a=0 if apple was not hit
+is_an_apple:
+	ld hl,apples
+	ld b,apple_cnt
 	
-	; else = die
+iaa_loop_x:
+	dec b	; if run out of apples, quit
+	jp pe, iaa_not_found
 	
-	; TODO
+	ld a,(hl)
+	cp d	; x-coor
+	jp z,iaa_ck_y ; x-coords match
+	inc hl
+	inc hl
+	jp iaa_loop_x
+
+iaa_ck_y:
+	inc hl
+	ld a,(hl)
+	cp e
+	jp z, iaa_found
+	inc hl
+	jp iaa_loop_x
 	
+iaa_found:
+	dec hl ; now points to x of the eaten apple!
+	ld a,1
+	ret
+
+iaa_not_found:
+	ld a,0
 	ret
 
 ; args: hl - addr to x coor of apple to be replaced
 gen_apple:
 	; no need to clear old apple since snake head overwrites this
 	push hl
-	push af
-	push bc
 	
 ga_loop:
-	pop bc
-	pop af
 	
 	call gen_rnd_xy
 	
 	; check coords in a,b for collisions!
-	push af
-	push bc
-	
+	ld d,a
+	ld e,b
+	push de
 	call get_pxl
+	pop de
+	
 	jp nz, ga_loop
 	
-	pop bc
-	pop af
-	
 	pop hl
-	ld (hl),a
+	ld (hl),d
 	inc hl
-	ld (hl),b
+	ld (hl),e
 	ret
 
-grow_segment
-	; TODO
-	ret
-
-check_collision:
-	; TODO
-		;TODO
-	;check eating apple
-	;gen apples
+grow:
+	;eat = replace apple with x @ hl - TODO
+	;elongate - TODO
 	
-	; apples
-	; 
+	;increase speed
+	ld hl,(speed)
+	ld de,speed_inc
+	or a
+	sbc hl,de
+	
+	jp c, grow_sp_max ; if < 0
+	jp z, grow_sp_max ; if == 0
+	jp grow_sp_inc ; otherwise
+	
+grow_sp_max:
+	ld hl,1
+grow_sp_inc:
+	ld (speed),hl
 	ret
 
 ; #######################################################################################
@@ -440,6 +475,7 @@ delay_loop:
 
 draw_snake:
 	ld hl, snake
+	ld d,0
 	ld de, (snake_len)
 	
 	call draw_pxl_array
