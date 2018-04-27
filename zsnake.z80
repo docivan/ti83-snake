@@ -9,7 +9,6 @@
 
 ; addresses
 _vram				.equ		8E29h ; video mem
-_OP1				.equ		8039h ; addr of OP1 variable used by TI83 internally
 
 ; functions
 _blitBuf			.equ		5164h	; Copy the graph backup to the screen
@@ -25,8 +24,6 @@ _runIndOff		.equ	 	4795h	; Turn off runindicator
 
 _getKey			.equ		4A18h ; get pressed key
 _textMode		.equ		47A1h ; switch to Home aka text mode
-
-_rndFloat		.equ		50B6h ; generate random float
 
 ; #######################################################################################
 ; USER DEFINED CONSTANTS
@@ -102,7 +99,8 @@ reset_all:
 	inc hl
 	ld (hl),'0'
 	
-	
+	ld hl,1500
+	ld (speed),hl
 	
 	ret
 
@@ -428,7 +426,7 @@ apple_loop:
 ; #######################################################################################
 
 dir:			.db	DIR_E
-nxt_dir:		.db	DIR_E, DIR_E
+nxt_dir:		.db	DIR_E
 snake_len:	.db	3
 stop_game:	.db	0
 speed:		.dw	1500 ; 3000 = ca 1 fps
