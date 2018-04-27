@@ -74,37 +74,227 @@ key_ENTER		.equ	9
 menu:
 	call _bufClr          ; Clear the graphbuf
 	
-	ld hl,game_over_bkg
+	ld hl,menu_bkg
 	ld de,_vram
 	ld bc,scr_w*scr_h/8
 	ldir
 	
 	call _blitBuf         ; Copy the graphbuf to the LCD
 	
-	; TODO
-menu_loop:
+	ld d,0 ;prev menu cursor x
+	ld e,0 ;prev menu cursor y
+	ld b,0 ;menu cursor x
+	ld c,0 ;menu cursor y
 	call menu_handle_kb
-	jp menu_loop
 	
-	;call start_game
+	call start_game
 	
-	;call _textMode
+	;TODO - put this init into separate reset function?
+	ld a,0
+	ld (stop_game),a
+	jp menu
 	
-	ret
-
-menu_draw_cursor:
-	ret
-
-_dispHL                 .equ     4709h
-
-menu_handle_kb:
-	call _getKey
-	cp 0
-	jp z, menu_handle_kb
-	ld h,0
-	ld l,a
-	call _dispHL
+	; TODO - exit gracefully!
 	call _textMode
+	
+	ret
+
+cursor_pos: .db 3,31, 3,47, 34,31, 34,47, 65,31, 65,47
+cursor_pos_x: .db 3,34,65
+cursor_pos_y: .db 31,47
+cursor_pos_flat: .db 3,31, 3,47, 34,31, 34,47, 65,31, 65,47
+
+; bc - new position, de - prev position
+menu_draw_cursor:
+	; TODO
+	jp atest3
+	
+	ld a,65
+	ld b,31
+	
+	push bc
+	push de
+	call put_pxl
+	pop de
+	pop bc
+	
+	ld a,3
+	ld b,47
+	
+	push bc
+	push de
+	call put_pxl
+	call _blitBuf
+	pop de
+	pop bc
+	ret
+
+atest4:
+	push bc
+	push de
+	
+	ld a,b
+	cp 0
+	jp z,0
+
+	
+	pop bc
+	pop de
+	
+	ret
+
+atest3:
+	push bc
+	push de
+	
+	ld hl,cursor_pos_x
+	;ld d,0
+	;ld e,b
+	;add hl,de
+	ld a,(hl)
+	
+	ld hl,cursor_pos_y
+	;ld e,c
+	;add hl,de
+	ld b,(hl)
+	
+	call put_pxl
+	
+	pop bc
+	pop de
+	
+	ret
+
+atest2:
+	
+	push bc
+	push de
+	
+	ld hl,cursor_pos-3
+	
+	ld a,0
+mdc_yloop:
+	inc hl
+	inc hl
+	inc a
+	cp c
+	jp c,mdc_yloop
+	
+	ld a,0
+mdc_xloop:
+	inc hl
+	inc a
+	cp b
+	jp c,mdc_xloop
+	
+	ld a,(hl)
+	inc hl
+	ld b,(hl)
+	
+	call put_pxl
+	
+	ret
+
+atest:	
+	;call _bufClr
+	
+	;pop bc
+	;pop de
+	push bc
+	push de
+	
+	ld h,b
+	
+	ld a,c
+	add a,31
+	ld b,a
+	
+	ld a,h
+	add a,3
+	
+	call put_pxl
+	
+	pop de
+	push de
+	
+	ld a,e
+	add a,50
+	ld b,a
+	
+	ld a,d
+	add a,5
+	
+	call clr_pxl
+	
+	call _blitBuf
+	
+	pop de
+	pop bc
+	
+	ret
+
+
+loading_str: .db "LOADING...",0
+
+print_loading:
+	ld a,32
+	ld (_penCol),a
+	ld a,37
+	ld (_penRow),a
+	set _txtWrToBuf, (iy + _sGrFlags) 
+	
+	ld hl,loading_str
+	call _drawText
+	call _blitBuf
+	ret
+	
+menu_handle_kb:
+	push bc
+	push de
+	call _getKey
+	pop de
+	pop bc
+	
+	cp key_UP
+	jp z,menu_kp_UP
+	cp key_DOWN
+	jp z,menu_kp_DOWN
+	cp key_LEFT
+	jp z,menu_kp_LEFT
+	cp key_RIGHT
+	jp z,menu_kp_RIGHT
+	cp key_ENTER
+	jp z,menu_kp_ENTER
+	
+	jp menu_handle_kb
+
+; TODO
+menu_kp_UP:
+	;call menu_draw_cursor
+	
+	ld e,c ; storing prev pos
+	ld a,c
+	dec c
+	cp 0
+	jp nz,menu_kp_draw
+	ld c,1
+	jp menu_kp_draw
+	
+menu_kp_DOWN:
+	
+menu_kp_LEFT:
+menu_kp_RIGHT:
+
+menu_kp_draw:
+	call menu_draw_cursor
+	jp menu_handle_kb
+	
+menu_kp_ENTER:
+	;TODO ck which element, exit gracefully if exit
+	call print_loading
+	call _bufClr
+	ld de,lvl2_map
+	
 	ret
 
 ; #######################################################################################
@@ -121,8 +311,14 @@ game_over:
 	
 	call _blitBuf         ; Copy the graphbuf to the LCD
 	
-	;TODO - wait for enter keypress
-	
+game_over_wait_enter:
+	call _getKey
+	cp key_ENTER
+	jp z,game_over_return
+	jp game_over_wait_enter
+
+game_over_return:
+	call print_loading
 	ret
 
 ; #######################################################################################
@@ -180,8 +376,7 @@ game_loop:
 	
 	ld a,(stop_game) ; check if we finished
 	cp 1
-	ret z
-	; TODO use the snake segments for an explosion!
+	jp z, game_loop_explode
 	
 	;idle while getting input
 	ld hl,(speed)		; otherwise sleep for 30ms and loop
@@ -195,6 +390,12 @@ gl_idle:
 	jp nz, gl_idle
 	
 	jp game_loop
+	ret
+
+game_loop_explode:
+	; TODO use the snake segments for an explosion!
+	
+	call game_over
 	ret
 
 ; #######################################################################################
@@ -740,7 +941,7 @@ draw_snake:
 ; #######################################################################################
 ; draw_map: draw initial map
 ;
-; no inputs
+; de - points to chosen level map
 ; returns nothing
 ; #######################################################################################
 
@@ -748,7 +949,7 @@ dmloopvar: .db 48
 dmbytecnt: .db	3
 draw_map:
 	ld hl,_vram-1
-	ld de,lvl2_map
+	;ld de,lvl2_map ; de should be set to chosen map before this function is called!
 	ld b,00000001b
 	rr b ;carry primed with 1
 
