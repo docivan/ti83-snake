@@ -85,6 +85,7 @@ menu:
 	ld e,0 ;prev menu cursor y
 	ld b,0 ;menu cursor x
 	ld c,0 ;menu cursor y
+	call menu_draw_cursor
 	call menu_handle_kb
 	
 	call start_game
@@ -99,140 +100,91 @@ menu:
 	
 	ret
 
-cursor_pos: .db 3,31, 3,47, 34,31, 34,47, 65,31, 65,47
+;pre-defined cursor position for menu elements
 cursor_pos_x: .db 3,34,65
 cursor_pos_y: .db 31,47
-cursor_pos_flat: .db 3,31, 3,47, 34,31, 34,47, 65,31, 65,47
 
 ; bc - new position, de - prev position
 menu_draw_cursor:
-	; TODO
-	jp atest3
-	
-	ld a,65
-	ld b,31
-	
-	push bc
-	push de
-	call put_pxl
-	pop de
-	pop bc
-	
-	ld a,3
-	ld b,47
-	
-	push bc
-	push de
-	call put_pxl
-	call _blitBuf
-	pop de
-	pop bc
-	ret
-
-atest4:
 	push bc
 	push de
 	
-	ld a,b
-	cp 0
-	jp z,0
-
+	ld b,d
+	ld c,e
 	
-	pop bc
+	ld hl,cursor_pos_x
+	ld d,0
+	ld e,b
+	add hl,de
+	ld a,(hl)
+	
+	ld hl,cursor_pos_y
+	ld e,c
+	add hl,de
+	ld b,(hl)
+	
+	ld d,a
+	ld e,b
+	push de
+	call clr_pxl
 	pop de
+	ld a,d
+	ld b,e
 	
-	ret
-
-atest3:
+	inc a
+	inc b
+	push de
+	call clr_pxl
+	pop de
+	ld a,d
+	ld b,e
+	
+	inc b
+	inc b
+	call clr_pxl
+	
+	pop de
+	pop bc
+	
 	push bc
 	push de
 	
 	ld hl,cursor_pos_x
-	;ld d,0
-	;ld e,b
-	;add hl,de
+	ld d,0
+	ld e,b
+	add hl,de
 	ld a,(hl)
 	
 	ld hl,cursor_pos_y
-	;ld e,c
-	;add hl,de
+	ld e,c
+	add hl,de
 	ld b,(hl)
 	
+	ld d,a
+	ld e,b
+	push de
 	call put_pxl
-	
-	pop bc
 	pop de
-	
-	ret
-
-atest2:
-	
-	push bc
-	push de
-	
-	ld hl,cursor_pos-3
-	
-	ld a,0
-mdc_yloop:
-	inc hl
-	inc hl
-	inc a
-	cp c
-	jp c,mdc_yloop
-	
-	ld a,0
-mdc_xloop:
-	inc hl
-	inc a
-	cp b
-	jp c,mdc_xloop
-	
-	ld a,(hl)
-	inc hl
-	ld b,(hl)
-	
-	call put_pxl
-	
-	ret
-
-atest:	
-	;call _bufClr
-	
-	;pop bc
-	;pop de
-	push bc
-	push de
-	
-	ld h,b
-	
-	ld a,c
-	add a,31
-	ld b,a
-	
-	ld a,h
-	add a,3
-	
-	call put_pxl
-	
-	pop de
-	push de
-	
-	ld a,e
-	add a,50
-	ld b,a
-	
 	ld a,d
-	add a,5
+	ld b,e
 	
-	call clr_pxl
+	inc a
+	inc b
+	push de
+	call put_pxl
+	pop de
+	ld a,d
+	ld b,e
+	
+	inc b
+	inc b
+	call put_pxl
 	
 	call _blitBuf
-	
 	pop de
 	pop bc
 	
 	ret
-
 
 loading_str: .db "LOADING...",0
 
@@ -268,11 +220,10 @@ menu_handle_kb:
 	
 	jp menu_handle_kb
 
-; TODO
 menu_kp_UP:
-	;call menu_draw_cursor
-	
+	ld d,b ; storing prev pos
 	ld e,c ; storing prev pos
+	
 	ld a,c
 	dec c
 	cp 0
@@ -281,9 +232,37 @@ menu_kp_UP:
 	jp menu_kp_draw
 	
 menu_kp_DOWN:
+	ld d,b ; storing prev pos
+	ld e,c ; storing prev pos
+	
+	ld a,c
+	inc c
+	cp 1
+	jp nz,menu_kp_draw
+	ld c,0
+	jp menu_kp_draw
 	
 menu_kp_LEFT:
+	ld d,b ; storing prev pos
+	ld e,c ; storing prev pos
+	
+	ld a,b
+	dec b
+	cp 0
+	jp nz,menu_kp_draw
+	ld b,2
+	jp menu_kp_draw
+	
 menu_kp_RIGHT:
+	ld d,b ; storing prev pos
+	ld e,c ; storing prev pos
+	
+	ld a,b
+	inc b
+	cp 2
+	jp nz,menu_kp_draw
+	ld b,0
+	jp menu_kp_draw
 
 menu_kp_draw:
 	call menu_draw_cursor
