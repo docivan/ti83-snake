@@ -2,160 +2,1339 @@
 #define equ .equ
 #define EQU .equ
 #define end .end
-#include "ti83asm.inc"
-#include "tokens.inc"
 
-WAITKEY .equ     4CFEh  ; Wait for a key and read
-BUFCLR	.equ	 515Bh	; Clear the graph backup
-BUFCOPY .equ	 5164h	; Copy the graph backup to the screen
-RINDOFF .equ	 4795h	; Turn off runindicator
-PRINTHL .equ	 4709h	; Print HL in dec. on the screen
-OP2TOP1 .equ	 41C2h	; Move OP2 to OP1
-CONVOP1 .equ	 4EFCh	; Convert fp value in OP1 to a 2 byte hex
-READKEY .equ	 4A18h	; Read key and place it in OP2 as a fp value
-GOHOME	.equ	 47A1h	; Go to home screen (finish gfx program)
-CLRTSHD .equ	 4765h	; Clear text shadow
-HOMEUP	.equ	 4775h	; Place cursor at home
-STRING	.equ	 470Dh	; Print 0 terminated string to screen (hl->string)
+; #######################################################################################
+; SYSTEM CALLS AND ADDR
+; #######################################################################################
 
-VIDMEM	.equ	8E29h ; video mem
+; addresses
+_vram				.equ		8E29h ; video mem
+_OP1				.equ		8039h ; addr of OP1 variable used by TI83 internally
+
+; functions
+_blitBuf			.equ		5164h	; Copy the graph backup to the screen
+_bufClr			.equ		515Bh	; Clear the graph backup
+
+_drawText		.equ		4781h ; draw small text
+_sGrFlags		.equ		20		; IY OFFSET VALUE
+_txtWrToBuf		.equ		7	; bit offset for 
+_penCol			.equ		8252h
+_penRow			.equ		8253h
+
+_runIndOff		.equ	 	4795h	; Turn off runindicator
+
+_getKey			.equ		4A18h ; get pressed key
+_textMode		.equ		47A1h ; switch to Home aka text mode
+
+_rndFloat		.equ		50B6h ; generate random float
+
+; #######################################################################################
+; USER DEFINED CONSTANTS
+; #######################################################################################
+
+scr_w 			.equ	96
+scr_h				.equ	64
+scr_w_b			.equ	scr_w/8
+
+score_pos_x		.equ	scr_w - 12 - 1 ; 4 pxl per number + 1 padding
+score_area_x	.equ	score_pos_x - 2 ; score area x starts here, 2 pxl extra padding
+score_area_y	.equ	8 ; score area y ends here
+
+snake_len_max	.equ	64
+apple_cnt		.equ	10
+speed_inc		.equ	50
+
+DIR_N				.equ	0
+DIR_E				.equ	1
+DIR_S				.equ	2
+DIR_W				.equ	3
+
+key_UP			.equ	4
+key_DOWN			.equ	1
+key_LEFT			.equ	2
+key_RIGHT		.equ	3
+key_ENTER		.equ	9
+
+; #######################################################################################
+; PROGRAM ENTRY POINT
+; #######################################################################################
 
 .LIST
 .org 9327h
 
-    call _clrLCDFull ;Clear the screen.
-    ld hl,0003 ;Put 3 into Hl.
-    ld (currow),hl ;Put HL into cursor row.
-    ld hl,mem ;Loads text in hl.
-    ;call _PUTS ;Ends string....
-    ;call _PDspGrph
-    ;call _REGRAPH
-    ;call _PUTXY
-    ;ld hl,55h
-    ;ld (8E29h),hl
-    
-    ;call _clrScrnFull
-    ;call _clrLCDFull
-    
-    ; testing
-    ;call 515Bh
-    ;call 5164h
-    
-    ;jp HACK
-    
-    call    RINDOFF         ; Turn off runindicator
-        call    BUFCLR          ; Clear the graphbuf
-        call    BUFCOPY         ; Copy the graphbuf to the LCD
-   
-   
-   ld hl, 0101010101100110b	; little-endian / LSB / least significant first
-   ld (8E29h),hl
-   
-   ;96x64... ie 12x8 bytes
-   ld hl, VIDMEM
-   ld bc,342 ;8x8 should be at x=44 y=28; ie ca 336 + 48 = 384
-   add hl,bc
-   ld (hl), 00111100b
-   
-   ld bc,12
-   
-   add hl,bc
-   ld (hl), 01000010b
-   
-   add hl,bc
-   ld (hl), 10100101b
-   
-   add hl,bc
-   ld (hl), 10000001b
-   
-   add hl,bc
-   ld (hl), 10100101b
-   
-   add hl,bc
-   ld (hl), 10011001b
-   
-   add hl,bc
-   ld (hl), 01000010b
-   
-   add hl,bc
-   ld (hl), 00111100b
-   
-   ;call    BUFCOPY         ; Copy the graphbuf to the LCD
-   
-HACK:
-	call _clrLCDFull ;Clear the screen.
-	call _RANDOM
-	;call _formReal
-   ;ld hl,currow
-   ;inc (hl)
-   ;ld (currow),hl ;Put HL into cursor row.
-   ;ld hl,OP3 ;Loads text in hl.
-   ;call _PUTS
-   ;ld a,4
-   ;call _DISPOP1A
-   
-   ;ret
-   ;call _CONVOP1
-   ;ld hl,5
-   ;add hl,de
-   ;ld l,1
-   ;ld l,0
-   
-   ;ld hl,OP1
-   ;ld de,6
-   ;add hl,de
-   ;ld a,(hl)
-   ;ld h,0
-   
-   
-   ;ld l,a
-   
-   ld a,64
-   call gen_rnd
-   ld h,0
-   ld l,a
-   call _dispHL
-   ;ld a,5
-   ;call _DISPOP1A
-   ;call    BUFCOPY
-   
-   
-   ret 
-   
-   ld hl,OP1
-   ld de,1
-   add hl,de
-   ld a,(hl)
-   
-   ld d,a
-   ld e,0
-   
-   ld hl,0
-   add hl,de
-   
-   ;ld hl,0
-   ;add hl,de
-   ;call _dispHL
-    
-    ret ;Return to basic mode.
-
-gen_rnd: ; a - max val, should be <256
-	ld b,a
-	call _RANDOM
-	ld hl,OP1
-   ld de,6
-   add hl,de
-   ld a,(hl) ; random number
-   ;ret
-gen_rnd_loop:
-	ld c,a ; c - previous number
-	sub b
-	jp nc,gen_rnd_loop
-	
-	ld a,c ; load previous nr into a
+	; prep environment
+	call _runIndOff         ; Turn off runindicator
+	call menu
 	ret
-   
 
-mem: ;This is your label.
-.db "Hello, I am Ivan!",0
+; #######################################################################################
+; MENU
+; #######################################################################################
+
+menu:
+	call _bufClr          ; Clear the graphbuf
+	
+	ld hl,game_over_bkg
+	ld de,_vram
+	ld bc,scr_w*scr_h/8
+	ldir
+	
+	call _blitBuf         ; Copy the graphbuf to the LCD
+	
+	; TODO
+menu_loop:
+	call menu_handle_kb
+	jp menu_loop
+	
+	;call start_game
+	
+	;call _textMode
+	
+	ret
+
+menu_draw_cursor:
+	ret
+
+_dispHL                 .equ     4709h
+
+menu_handle_kb:
+	call _getKey
+	cp 0
+	jp z, menu_handle_kb
+	ld h,0
+	ld l,a
+	call _dispHL
+	call _textMode
+	ret
+
+; #######################################################################################
+; GAMEOVER
+; #######################################################################################
+
+game_over:
+	call _bufClr          ; Clear the graphbuf
+	
+	ld hl,game_over_bkg
+	ld de,_vram
+	ld bc,scr_w*scr_h/8
+	ldir
+	
+	call _blitBuf         ; Copy the graphbuf to the LCD
+	
+	;TODO - wait for enter keypress
+	
+	ret
+
+; #######################################################################################
+; START GAME
+; #######################################################################################
+
+start_game:
+	call draw_map
+	call prep_score
+	
+	;generate apples
+	ld a,apple_cnt
+	ld hl,apples
+apple_loop:
+	push af
+	call gen_apple
+	inc hl
+	pop af
+	
+	dec a
+	jp nz, apple_loop
+	
+	call draw_apples
+	call draw_score
+	
+	call _blitBuf
+	
+	call game_loop
+	ret
+
+; #######################################################################################
+; GAME LOOP
+; #######################################################################################
+
+cur_map:		.dw	0
+dir:			.db	DIR_E
+snake_len:	.db	3
+stop_game:	.db	0
+speed:		.dw	1000 ; 3000 = ca 1 fps
+score_str:	.db	"000",0
+
+game_loop:
+	; below is the main vgame loop
+		
+	;move
+	call move_snake
+	
+	; handle collisions
+	call handle_collisions
+	
+	call draw_snake
+	;call draw_apples - this is only done when new apples appear
+	
+	call _blitBuf	;blit
+	
+	ld a,(stop_game) ; check if we finished
+	cp 1
+	ret z
+	; TODO use the snake segments for an explosion!
+	
+	;idle while getting input
+	ld hl,(speed)		; otherwise sleep for 30ms and loop
+gl_idle:
+	push hl
+	call handle_input
+	pop hl
+	dec hl
+	ld a,h
+	or l
+	jp nz, gl_idle
+	
+	jp game_loop
+	ret
+
+; #######################################################################################
+
+prep_score:
+	; draw 1pxl border
+	
+	ld d,score_area_x
+	ld e,0
+
+ps_h_line_loop:
+	ld a,d
+	ld b,e
+	push de
+	call put_pxl
+	pop de
+	
+	ld a,d
+	ld b,e
+	add a,14
+	
+	push de
+	call put_pxl
+	pop de
+	
+	inc e
+	ld a,e
+	cp score_area_y
+	jp nz, ps_h_line_loop
+	
+	inc d
+	dec e
+
+ps_v_line_loop:
+	ld a,d
+	ld b,e
+	push de
+	call put_pxl
+	pop de
+	inc d
+	ld a,d
+	cp scr_w-1
+	jp nz, ps_v_line_loop
+	
+	ret
+
+draw_score
+	ld a,score_pos_x
+	ld (_penCol),a
+	xor a
+	ld (_penRow),a
+	set _txtWrToBuf, (iy + _sGrFlags) 
+	
+	ld hl,score_str
+	call _drawText
+	ret
+
+inc_score:
+	ld hl, score_str+2
+	ld b,3
+
+isc_loop:
+	ld a,(hl)
+	inc a
+	cp 3ah
+	jp nz, is_store_and_draw_done
+	
+	ld a, 30h ; ascii for '0'
+	ld (hl),a
+	dec hl
+	dec b
+	jp z,is_draw_done ; if we have gone through all 3 numbers, return - this happens when score >999
+							; => rollover to 000 gracefully
+	jp isc_loop
+	
+
+is_store_and_draw_done:
+	ld (hl),a
+is_draw_done:
+	call draw_score
+	ret
+
+; #######################################################################################
+; draw_pxl_array: draw an array of 'e' pixels with coords starting at addr in 'hl'
+;
+; args: hl - array ptr, e - nr of words (ie coords: (x,y) = 1)
+; #######################################################################################
+
+draw_pxl_array:
+	ld a,(hl)
+	inc hl
+	ld b,(hl)
+	inc hl
+	
+	push hl
+	push de
+	call put_pxl
+	pop de
+	pop hl
+	
+	dec e
+	jp nz, draw_pxl_array
+	
+	ret
+
+; #######################################################################################
+; draw_apples: draw all apples
+; no args
+; #######################################################################################
+
+draw_apples:
+	ld hl, apples
+	ld e, (apple_cnt)
+	
+	call draw_pxl_array
+	
+	ret
+
+; #######################################################################################
+; handle_collisions: check whether we have hit a wall, ourselves or an apple
+; no args
+; #######################################################################################
+
+handle_collisions:
+	; collision = if pxl head is on is already filled
+	ld hl,snake
+	ld a,(hl)
+	inc hl
+	ld b,(hl)
+	
+	ld d,a
+	ld e,b
+	push de
+	call get_pxl
+	pop de
+	
+	ret z ; no collisions
+	
+	; if apple = eat + elongate
+	call is_an_apple
+	cp 1
+	jp nz, hc_die
+	call grow
+	ret
+	
+hc_die: ; else = die
+	ld hl,stop_game
+	ld (hl), 1
+	ret
+
+; #######################################################################################
+; is_an_apple: check if there is an apple at position (d,e)
+; returns a=1 if apple hit with hl pointing at x coor of that apple
+; returns a=0 if apple was not hit
+; #######################################################################################
+
+is_an_apple:
+	ld hl,apples
+	ld b,apple_cnt
+	
+iaa_loop_x:
+	dec b	; if run out of apples, quit
+	jp pe, iaa_not_found
+	
+	ld a,(hl)
+	cp d	; x-coor
+	jp z,iaa_ck_y ; x-coords match
+	inc hl
+	inc hl
+	jp iaa_loop_x
+
+iaa_ck_y:
+	inc hl
+	ld a,(hl)
+	cp e
+	jp z, iaa_found
+	inc hl
+	jp iaa_loop_x
+	
+iaa_found:
+	dec hl ; now points to x of the eaten apple!
+	ld a,1
+	ret
+
+iaa_not_found:
+	ld a,0
+	ret
+
+
+; #######################################################################################
+; gen_apple: find random (x,y) coordinates that are not occupied by anything else, 
+; 					then write these coords to mem addr hl (x) and hl+1 (y)
+; 
+; args: hl - addr to x coor of apple to be replaced
+; #######################################################################################
+
+gen_apple:
+	; no need to clear old apple since snake head overwrites this
+	push hl
+	
+ga_loop:
+	
+	call gen_rnd_xy
+	
+	ld d,a
+	ld e,b
+	
+	; check that a,b is not within score area
+	cp score_area_x
+	jp nc, ga_loop ; x >= score_area_x
+	
+	ld a,b
+	cp score_area_y+1
+	jp c, ga_loop ; y < (score_area_y+1)
+	
+	ld a,d
+	
+	; check coords in a,b for collisions!
+	push de
+	call get_pxl
+	pop de
+	
+	jp nz, ga_loop
+	
+	
+	
+	pop hl
+	ld (hl),d
+	inc hl
+	ld (hl),e
+	ret
+
+; #######################################################################################
+; grow: grow snake with one segment after eting an apple, generate a new apple
+;
+; args: hl = location of snake head / apple
+; #######################################################################################
+
+grow:
+	;eat = replace apple with x @ hl
+	;no need to clear old apple since snake head overwrites this
+	call gen_apple
+	
+	; draw it
+	ld a,d
+	ld b,e
+	call put_pxl
+	
+	;elongate
+	;check if at max length
+	ld a,(snake_len)
+	cp snake_len_max
+	jp nc, grow_speed
+	
+	ld hl,do_elongate
+	inc (hl)
+	
+	; increase score
+	call inc_score
+	
+	;finally, increase speed
+grow_speed:
+	ld hl,(speed)
+	ld de,speed_inc
+	or a
+	sbc hl,de
+	
+	jp c, grow_sp_max ; if < 0
+	jp z, grow_sp_max ; if == 0
+	jp grow_sp_inc ; otherwise
+	
+grow_sp_max:
+	ld hl,1
+grow_sp_inc:
+	ld (speed),hl
+	ret
+
+; #######################################################################################
+; HANDLE INPUT
+; #######################################################################################
+
+handle_input
+	call _getKey
+	
+	cp key_UP
+	jp z,kp_UP
+	cp key_DOWN
+	jp z,kp_DOWN
+	cp key_LEFT
+	jp z,kp_LEFT
+	cp key_RIGHT
+	jp z,kp_RIGHT
+	;TODO handle the Enter key! (for menu)
+	ret
+
+kp_UP:
+	ld a,(dir)
+	cp DIR_S
+	ret z
+	
+	ld a, DIR_N
+	ld (dir), a
+	ret
+	
+kp_DOWN:
+	ld a,(dir)
+	cp DIR_N
+	ret z
+	
+	ld a, DIR_S
+	ld (dir), a
+	ret
+kp_LEFT:
+	ld a,(dir)
+	cp DIR_E
+	ret z
+	
+	ld a, DIR_W
+	ld (dir), a
+	ret
+kp_RIGHT:
+	ld a,(dir)
+	cp DIR_W
+	ret z
+	
+	ld a, DIR_E
+	ld (dir), a
+	ret
+
+; #######################################################################################
+; MOVE SNAKE functions
+; #######################################################################################
+
+do_elongate:	.db	0
+
+move_snake:
+	ld a,(do_elongate)
+	cp 1
+	jp nz, ms_not_grown
+	
+	call grow_element
+	jp ms_move
+	
+ms_not_grown: ; only if not growing
+	call clear_tail
+	
+ms_move:
+	call move_body
+	call move_head
+	
+	ld a,(do_elongate)
+	cp 1
+	ret nz
+	
+	; if have grown...
+	; not growing any more
+	xor a
+	ld (do_elongate),a
+	
+	; increase length variable
+	ld hl, snake_len
+	inc (hl)
+	
+	ret
+
+grow_element:
+	
+	; copy last elem to len+1
+	
+	ld hl,snake
+	ld de,(snake_len)
+	
+	add hl,de
+	add hl,de
+	
+	ld d,h
+	ld e,l
+	
+	dec de
+	dec de
+	
+	ld a,(de)
+	ld (hl),a
+	
+	inc hl
+	inc de
+	
+	ld a,(de)
+	ld (hl),a
+	
+	ret
+
+clear_tail:
+	;find tail
+	ld hl,snake
+	ld de,(snake_len)
+	dec de
+	
+	add hl,de
+	add hl,de
+	
+	ld a,(hl)
+	inc hl
+	ld b,(hl)
+	
+	call clr_pxl
+	ret
+
+move_body:
+	ld hl,snake
+	ld de,(snake_len)
+	dec de
+	
+	add hl,de
+	add hl,de
+	inc hl
+	
+	; now copy
+	ld d,h
+	ld e,l	; now both pointing at y-coor of the last elem
+	
+	dec de
+	dec de	; de is now 1 segm ahead
+	
+	ld a,(snake_len)
+	dec a
+	add a,a
+	ld b,a
+
+ms_cpy_loop:
+	ld a,(de)
+	ld (hl),a
+	dec hl
+	dec de
+	dec b
+	jp nz,ms_cpy_loop
+	
+	ret
+	
+	; 00 00 00
+	
+	; move in current dir
+move_head:
+	ld a,(dir)
+	cp DIR_N
+	jp z,mv_north
+	cp DIR_S
+	jp z,mv_south
+	cp DIR_W
+	jp z,mv_west
+	cp DIR_E
+	jp z,mv_east
+	
+mv_south:
+	ld hl,snake
+	inc hl
+	ld a,(hl)
+	inc a
+	cp scr_h
+	jp c, noob_south
+	ld a,0
+noob_south:  			; not out of bounds
+	ld (hl),a
+	ret
+	
+mv_north:
+	ld hl,snake
+	inc hl
+	ld a,(hl)
+	dec a
+	jp p, noob_north	;>=0
+	ld a,scr_h-1
+noob_north:  			; not out of bounds
+	ld (hl),a
+	ret
+	
+mv_west:
+	ld hl,snake
+	ld a,(hl)
+	dec a
+	jp p, noob_west ; >=0
+	ld a,scr_w-1
+noob_west:  			; not out of bounds
+	ld (hl),a
+	ret
+
+mv_east:
+	ld hl,snake
+	ld a,(hl)
+	inc a
+	cp scr_w
+	jp c, noob_east
+	ld a,0
+noob_east:  			; not out of bounds
+	ld (hl),a
+	ret
+
+
+; #######################################################################################
+; delay: idle for a given number of cycles (given by de) in multiplicants of 0xffff
+;
+; input: delay de * 0xffff
+; returns nothing
+; #######################################################################################
+
+;6 MHz, ie 6 000 000 / s
+; 1ms = 1000 / s
+; thus need to perform 6000 cycles for 1 ms
+
+delay:
+	ld hl,249				; 24*249 = 5976 cycles + 29 for the outer = 6005c
+	
+delay_loop:
+	dec hl					; 6 cycles
+	ld a,h					; 4 cycles	; cp low byte
+	or l						; 4 cycles	; cmp with hi byte - if both not 0 - continue inner loop
+	jp nz, delay_loop		; 10 cycles
+	
+	dec de					;6c
+	ld a,d					;4c
+	or e						;4c
+	ret z						;5c
+	jp delay					;10c
+
+; thus 24c per inner loop + 29c for outer
+
+; #######################################################################################
+; draw_snake: draw snake
+;
+; no inputs
+; returns nothing
+; #######################################################################################
+
+draw_snake:
+	ld hl, snake
+	ld d,0
+	ld de, (snake_len)
+	
+	call draw_pxl_array
+	
+	ret
+
+; #######################################################################################
+; draw_map: draw initial map
+;
+; no inputs
+; returns nothing
+; #######################################################################################
+
+dmloopvar: .db 48
+dmbytecnt: .db	3
+draw_map:
+	ld hl,_vram-1
+	ld de,lvl2_map
+	ld b,00000001b
+	rr b ;carry primed with 1
+
+dmloop:
+	rr b				;shift to next bit in map mask byte
+	jp z,dmnxtbyte	;if it is zero, load next byte from map
+	
+	inc hl 			;switch to next byte in _vram for every two bits in map
+	ld a,(de)		;get current map byte
+	and b				;and mask
+	jp z,dmbit2		;if empty - go to next bit
+	ld c,11110000b
+	call draw_tile
+dmbit2:
+	rr b				;shift to next bit in map mask byte
+	ld a,(de)		;get current map byte
+	and b				;and mask
+	jp z,dmloop		;if there is nothing to draw, continue with next 2 bits
+	ld c,00001111b
+	call draw_tile
+	ld a,(hl)		;load vram byte
+	or c				;apply it on top of already drawn mem
+	ld (hl),a		;cp to vram
+	jp dmloop
+dmnxtbyte:
+	inc de			;load next map byte
+	
+	ld a,(dmloopvar)
+	dec a
+	ret z
+	ld (dmloopvar),a
+	
+	ld a,(dmbytecnt)
+	dec a
+	ld (dmbytecnt),a
+	jp nz,dmloop
+	
+	ld a,3
+	ld (dmbytecnt),a
+	
+	push af
+	push de
+	ld de,36
+	add hl,de
+	pop de
+	pop af
+	
+	jp dmloop		;continue
+
+draw_tile
+	push bc
+	push de
+	push hl
+	
+	ld b,4
+	ld de,12
+
+dt_loop:
+	ld a,(hl)
+	or c
+	ld (hl),a
+	
+	add hl,de
+	dec b
+	jp nz, dt_loop
+	
+	pop hl
+	pop de
+	pop bc
+	ret
+
+; #######################################################################################
+; gen_rnd_xy: generate random coords (a,b) within screen limits
+;
+; no inputs
+; returns nothing
+; #######################################################################################
+gen_rnd_xy:
+	; gen y
+	ld a,scr_h-1
+	call gen_rnd
+	ld b,a
+	; gen x
+	push bc
+	ld a,scr_w-1
+	call gen_rnd
+	pop bc
+	; done
+	ret
+
+; #######################################################################################
+; PIXEL MANIPULATION
+; #######################################################################################
+
+; #######################################################################################
+; put_pxl: put pixel at (a,b)
+;
+; kills bascially everything
+; returns nothing
+; #######################################################################################
+
+put_pxl:
+	call get_vram_addr
+	
+	ld hl, bitmasks
+	ld b,0
+	add hl,bc
+	ld c,(hl) ; bitmask is now stored in c
+	
+	ld hl, _vram
+	add hl,de
+	ld a,(hl)
+	or c			; XOR
+	
+	ld (hl),a 	; put back the byte
+	ret
+
+; #######################################################################################
+; clr_pxl: clear pixel at (a,b)
+;
+; kills bascially everything
+; returns nothing
+; #######################################################################################
+
+clr_pxl:
+	;the same as put_pxl, but with an extra NOT (cpl) and AND
+	call get_vram_addr
+	
+	ld hl, bitmasks
+	ld b,0
+	add hl,bc
+	ld c,(hl) ; bitmask is now stored in c
+	ld a,c
+	cpl			;NOT
+	ld c,a
+	
+	ld hl, _vram
+	add hl,de
+	ld a,(hl)
+	and c			; AND
+	
+	ld (hl),a 	; put back the byte
+	ret
+
+; get pixel val from (a,b)
+; returns a
+
+get_pxl:
+	; TODO
+	call get_vram_addr
+	
+	ld hl, bitmasks
+	ld b,0
+	add hl,bc
+	ld c,(hl) ; bitmask is now stored in c
+	
+	ld hl, _vram
+	add hl,de
+	ld a,(hl)
+	and c			; AND
+	
+	ret
+
+; #######################################################################################
+; get_vram_addr: convert coords (a,b) to array idx (de) and which bit to flip (c)
+;
+; kills bascially everything
+; returns de, c
+; #######################################################################################
+
+get_vram_addr:	
+	; idx = y*scr_w_ch + (int)(x/8)
+	; bit = rest after div
+	
+	ld d,a
+	ld e,8
+	push de
+	
+	; y*scr_w_b
+	ld a,b
+	ld b,scr_w_b
+	call mul 		;result in hl
+	
+	pop de	; get ready for division
+	push hl 	; push result on the stack
+	call div	; now a = result, b = rest
+	
+	ld d,0
+	ld e,a
+	
+	pop hl
+	add hl,de
+	
+	; return values
+	ld d,h
+	ld e,l
+	
+	ld c,b
+	
+	ret
+
+
+; #######################################################################################
+; div: perform multiplication of two 8 byte integers hl = a*b
+;
+; kills de, hl, ab
+; returns hl
+; #######################################################################################
+
+mul:
+	ld hl,0
+	ld d,0
+	
+	; is a == 0?
+	cp d
+	jp z, mul_zero
+	
+	; speed up by forking according to a>b?
+	cp b
+	jp c,mul_b_lt_a
+	
+	;a>b
+	ld e,a
+	jp mul_loop
+    
+	;b>a
+mul_b_lt_a:
+	ld e,b
+	ld b,a
+
+mul_loop:
+	add hl,de
+	dec b
+	jp pe, mul_zero ; b == -1, ie was == 0
+	jp nz, mul_loop
+	
+	ret
+	
+mul_zero: ; multipleier is zero
+	ld hl,0
+	ret
+    
+
+; #######################################################################################
+; div_unsafe: perform 8 byte integer division d = a/b, e = rest
+; NB! div/0 will hang the machine!
+;
+; kills <none>
+; returns de
+; #######################################################################################
+div_unsafe:
+	ld d,0
+	
+div_unsafe_loop:
+	inc d
+	sub b
+	jp nc, div_unsafe_loop
+	
+	dec d
+	add a,b
+	ld e,a 
+	ret
+
+
+; #######################################################################################
+; div: perform 8 byte integer division a = d/e, b = rest
+;
+; kills <none>
+; returns ab
+; #######################################################################################
+
+div:
+	; avoid div/0
+	ld a,0
+	cp e
+	jp nz, div_non_zero
+	ld b,0
+	ret
+
+div_non_zero:
+	ld a,d
+	ld d,0
+div_loop:
+	inc d
+	sub e
+	jp nc, div_loop
+	
+	dec d		; wind back div counter with 1
+	add a,e	; add divident to get rest
+	
+	; store in de
+	ld b,a
+	ld a,d
+	ret
+
+
+; #######################################################################################
+; gen_rnd: generate a random number from 0 up to and including max
+;
+; reg a = max value <256
+; kills e
+; returns a
+; #######################################################################################
+gen_rnd:
+	ld e,a
+	push de			; save parsed params
+	call _rndFloat	; call internal routine
+   ld a,(_OP1+6)	; get the random nr stored in (OP1 + 6)
+   pop de 			; get parsed params back
+gen_rnd_loop:
+	sub e				; a-e
+	jp nc,gen_rnd_loop ; if result < 0, continue
+	
+	add a,e			; add max_val to result to make it positive
+	ld e,a			; store it in e
+	
+	; this is to make this function inclusive of max_val
+	ld a,r			; get mem refresh register
+	and 00000010b	; mask bit 6 only (the last bit (7) is not altered by mem refresh)
+	jp z,gen_rnd_finished
+	
+	inc e				; if the bit is 1, increase value
+	
+gen_rnd_finished:
+	ld a,e			; store return value in a
+	ret
+
+; #######################################################################################
+; sprites and other mem defines
+
+; LUTS
+
+bitmasks:
+	.db 10000000b ;0
+	.db 01000000b ;1
+	.db 00100000b ;2
+	.db 00010000b ;3
+	.db 00001000b ;4
+	.db 00000100b ;5
+	.db 00000010b ;6
+	.db 00000001b ;7
+
+; stores location of all snake segments
+snake:
+	.db  48, 31,  47, 31,  46, 31, 255,255, 255,255, 255,255, 255,255, 255,255,
+	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
+	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
+	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
+	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
+	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
+	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255,
+	.db 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255, 255,255
+
+; stores location of all apples
+apples:
+	.db 10,10, 15,10, 20,10, 25,10, 30,10,
+	.db 35,10, 40,10, 45,10, 50,10, 55,10
+
+; assets
+
+; LVL 1
+lvl1_map: ;3x16 bytes
+	.db 10000000b,00011000b,00000000b,
+	.db 00000000b,00010000b,00100000b,
+	.db 00011011b,00011000b,11111000b,
+	.db 00001110b,00001000b,01110000b,
+	.db 00011011b,00011000b,11111000b,
+	.db 00000000b,00010000b,00100000b,
+	.db 00000000b,00110000b,00000000b,
+	.db 10111011b,11000001b,01110111b,
+	.db 11101110b,11100111b,11011101b,
+	.db 00000000b,00011100b,00000000b,
+	.db 00000100b,00001000b,00000000b,
+	.db 00011111b,00011000b,11011000b,
+	.db 00001110b,00010000b,01110000b,
+	.db 00011111b,00011000b,11011000b,
+	.db 00000100b,00001000b,00000000b,
+	.db 00000000b,00011000b,00000001b,
+
+; LVL 2
+lvl2_map: ;3x16 bytes
+	.db 00001000b,00000000b,00001000b,
+	.db 11101011b,11111111b,11101011b,
+	.db 00001010b,00000000b,00101000b,
+	.db 01111010b,11111111b,10101110b,
+	.db 00001010b,10000000b,10101000b,
+	.db 11101010b,10111110b,10101011b,
+	.db 00001010b,10100010b,10101000b,
+	.db 01111010b,10100000b,10101110b,
+	.db 00001010b,10100000b,10101000b,
+	.db 11101010b,10111111b,10101011b,
+	.db 00001010b,10000000b,00101000b,
+	.db 01111010b,11111111b,11101110b,
+	.db 00001010b,00000000b,00001000b,
+	.db 11101011b,11111111b,11111011b,
+	.db 00001000b,00000000b,00000000b,
+	.db 01111000b,00000000b,00000000b,
+
+; LVL 3
+lvl3_map: ;3x16 bytes
+	.db 10000000b,00011000b,00011111b,
+	.db 11000000b,00011000b,00001111b,
+	.db 11000000b,00001100b,00001111b,
+	.db 01100000b,00001110b,00000111b,
+	.db 01100000b,10000110b,00000111b,
+	.db 00110001b,11000110b,00110011b,
+	.db 00110000b,10000011b,00110011b,
+	.db 00111000b,00000011b,00000001b,
+	.db 00111000b,00000001b,10000001b,
+	.db 00011100b,00000001b,10000000b,
+	.db 00011100b,00001000b,11000000b,
+	.db 00001110b,00011100b,11000010b,
+	.db 00000110b,00001000b,01100000b,
+	.db 00100011b,00000000b,01100000b,
+	.db 00000011b,00000000b,00110000b,
+	.db 00000011b,10000000b,00110000b,
+	
+; LVL 4
+lvl4_map: ;3x16 bytes
+	.db 00000110b,00011000b,01100000b,
+	.db 00000000b,00000000b,00000000b,
+	.db 00110000b,11000011b,00001100b,
+	.db 00110000b,11000011b,00001100b,
+	.db 00000000b,00000000b,00000000b,
+	.db 00000110b,00011000b,01100000b,
+	.db 00000110b,00011000b,01100000b,
+	.db 00000000b,00000000b,00000000b,
+	.db 00110000b,11000011b,00001100b,
+	.db 00110000b,11000011b,00001100b,
+	.db 00000000b,00000000b,00000000b,
+	.db 00000110b,00011000b,01100000b,
+	.db 00000110b,00011000b,01100000b,
+	.db 00000000b,00000000b,00000000b,
+	.db 00110000b,11000011b,00001100b,
+	.db 00000000b,00000000b,00000000b,
+
+; LVL 5
+lvl5_map: ;3x16 bytes
+	.db 00000011b,00110011b,00110000b,
+	.db 11000000b,00000000b,00000000b,
+	.db 11001100b,11001100b,11001000b,
+	.db 11001100b,11001100b,11001000b,
+	.db 11001100b,11001100b,11001000b,
+	.db 11001100b,11001100b,11001000b,
+	.db 00001100b,11111111b,11001000b,
+	.db 00011111b,11000000b,11111000b,
+	.db 00010011b,00000000b,00110000b,
+	.db 00010011b,00110011b,00110011b,
+	.db 00010011b,00110011b,00110011b,
+	.db 00010011b,00110011b,00110011b,
+	.db 00010011b,00110011b,00110011b,
+	.db 00010011b,00110011b,00110011b,
+	.db 00000000b,00000000b,00000000b,
+	.db 11001100b,11001100b,11001100b,
+
+; main menu bkg
+menu_bkg:
+	.db 11111111b,11001101b,10111111b,11111000b,00001111b,11111000b,00000000b,00000000b,01111110b,00000000b,00000000b,00000000b,
+	.db 10000000b,00011111b,00011111b,00000011b,11100111b,11111011b,11101110b,01100011b,00111100b,11101001b,00110010b,01011110b,
+	.db 00111111b,10110000b,00000111b,01000100b,00010011b,11111000b,10000100b,10010100b,10011101b,00001101b,01001010b,10010000b,
+	.db 01110000b,01000111b,11110001b,00100010b,01001001b,11111110b,10000100b,01100001b,00111100b,11001011b,01111011b,00011100b,
+	.db 00100001b,11111110b,00011100b,10011111b,00000100b,11111110b,10000100b,10010100b,10011100b,00101001b,01001010b,10010000b,
+	.db 10000111b,00000011b,00010110b,00100011b,00000010b,01111110b,10001110b,01100011b,00111101b,11001001b,01001010b,01011110b,
+	.db 11101100b,00000001b,10001010b,01000100b,01110001b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,
+	.db 11001000b,00000000b,10000001b,00010011b,10001000b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,11111100b,
+	.db 11011000b,10000000b,11000011b,00111000b,00100100b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000010b,
+	.db 10010001b,00010000b,01000000b,10111111b,11110010b,10101010b,10101010b,10101010b,10101010b,10101010b,10101010b,10000010b,
+	.db 10010111b,01000000b,00000010b,10000000b,00000001b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,11000010b,
+	.db 10010110b,01010000b,10001000b,10011111b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,11100010b,
+	.db 10100111b,10001000b,00100000b,10100000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00100010b,
+	.db 10100111b,10100100b,00000001b,10100001b,01010101b,01010101b,01010101b,01010101b,01010101b,01010101b,01010101b,00100010b,
+	.db 10110110b,11011000b,00000000b,10100001b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,10100010b,
+	.db 10010111b,11101001b,00101000b,10100010b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00100010b,
+	.db 10010111b,10101010b,00000001b,10100010b,10101010b,10101010b,10101010b,10101010b,10101010b,10101010b,10101010b,10100010b,
+	.db 11001011b,11110100b,10100001b,00100001b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,11000010b,
+	.db 11000101b,11111010b,01000110b,00100000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000010b,
+	.db 11110110b,00111111b,10001100b,10100101b,01010101b,01010101b,01010101b,01010101b,01010101b,01010101b,01010101b,01010010b,
+	.db 11110011b,11000000b,00111001b,10101111b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,11111110b,
+	.db 11111000b,01111111b,11100011b,10011111b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,11111100b,
+	.db 11111110b,00000000b,00001111b,11000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000001b,
+	.db 11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,
+	.db 10000011b,11111111b,11111111b,11110000b,00000111b,11111111b,11111111b,11100000b,00001111b,11111111b,11111111b,11000001b,
+	.db 00000010b,00000000b,11000000b,00010000b,00000100b,00000010b,00000011b,11100000b,00001000b,10101010b,10101000b,01000000b,
+	.db 10000010b,00010000b,11000000b,00010000b,00000110b,00000011b,00000001b,11100000b,00001100b,00000000b,00000000b,01000001b,
+	.db 00000010b,00111000b,11000111b,00010000b,00000110b,00000001b,10001000b,11100000b,00001101b,01010101b,01010100b,01000000b,
+	.db 10000010b,00111000b,11000101b,00010000b,00000101b,00001000b,11000000b,01100000b,00001101b,01010101b,01010100b,01000001b,
+	.db 00000010b,00010000b,11000000b,00010000b,00000101b,10001000b,01100000b,01100000b,00001101b,01010101b,01010100b,01000000b,
+	.db 10000010b,00000000b,11000000b,00010000b,00000100b,10000000b,00110001b,00100000b,00001101b,01010101b,01010100b,01000001b,
+	.db 00000011b,11111111b,11111111b,11110000b,00000100b,01000000b,00011000b,00100000b,00001001b,11111111b,11111100b,01000000b,
+	.db 10000010b,00000000b,11000000b,00010000b,00000100b,00110000b,00001100b,00100000b,00001000b,10101010b,10101000b,11000001b,
+	.db 00000010b,00000000b,11000010b,00010000b,00000100b,00011000b,11000110b,00100000b,00001000b,10101010b,10101000b,11000000b,
+	.db 10000010b,00101000b,11000111b,00010000b,00000100b,00001100b,01100011b,00100000b,00001000b,10101010b,10101000b,11000001b,
+	.db 00000010b,00111000b,11000111b,00010000b,00000101b,10000100b,00000001b,00100000b,00001000b,10101010b,10101000b,11000000b,
+	.db 10000010b,00000000b,11000010b,00010000b,00000101b,00000110b,00000000b,10100000b,00001000b,00000000b,00000000b,11000001b,
+	.db 00000010b,00000000b,11000000b,00010000b,00000100b,00000011b,00000000b,11100000b,00001000b,01010101b,01010000b,01000000b,
+	.db 10000011b,11111111b,11111111b,11110000b,00000111b,11111111b,11111111b,11100000b,00001111b,11111111b,11111111b,11000001b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,
+	.db 10000011b,11111111b,11111111b,11110000b,00000111b,11111111b,11111111b,11100000b,00001111b,11111111b,11111111b,11000001b,
+	.db 00000010b,00000000b,00000000b,00010000b,00000100b,00000000b,00000000b,00100000b,00001000b,00000000b,00000000b,01000000b,
+	.db 10000011b,00000000b,00000000b,00010000b,00000101b,00010001b,00010001b,00100000b,00001000b,01100000b,01111111b,01000001b,
+	.db 00000010b,00011111b,11111110b,00110000b,00000100b,01000100b,01000100b,00100000b,00001000b,01110000b,01000001b,01000000b,
+	.db 10000011b,00010000b,00000010b,00010000b,00000101b,00010001b,00010001b,00100000b,00001000b,00100000b,01011001b,01000001b,
+	.db 00000010b,00010111b,11111010b,00110000b,00000100b,01000100b,01000100b,00100000b,00001000b,01101100b,01011001b,01000000b,
+	.db 10000011b,00010100b,00001010b,00010000b,00000101b,00010001b,00010001b,00100000b,00001000b,01110000b,01000001b,01000001b,
+	.db 00000010b,00010100b,00101010b,00110000b,00000100b,01000100b,01000100b,00100000b,00001000b,10100000b,01000101b,01000000b,
+	.db 10000011b,00010111b,11101010b,00010000b,00000101b,00010001b,00010001b,00100000b,00001001b,00110000b,01000001b,01000001b,
+	.db 00000010b,00010000b,00001010b,00110000b,00000100b,01000100b,01000100b,00100000b,00001000b,00111000b,01000001b,01000000b,
+	.db 10000011b,00011111b,11111010b,00010000b,00000101b,00010001b,00010001b,00100000b,00001000b,01100100b,01000001b,01000001b,
+	.db 00000010b,00000000b,00000010b,00110000b,00000100b,01000100b,01000100b,00100000b,00001000b,01000100b,01000001b,01000000b,
+	.db 10000010b,00000000b,00000000b,00010000b,00000101b,00010001b,00010001b,00100000b,00001000b,10000010b,01111111b,01000001b,
+	.db 00000011b,11111111b,11111111b,11110000b,00000100b,00000000b,00000000b,00100000b,00001000b,00000000b,00000000b,01000000b,
+	.db 10000000b,00000000b,00000000b,00000000b,00000111b,11111111b,11111111b,11100000b,00001111b,11111111b,11111111b,11000001b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00110000b,10001001b,00100000b,00010000b,11000100b,
+	.db 01010100b,11000000b,01100010b,01110010b,01100111b,00000101b,00100000b,01001001b,01010101b,01010000b,00101000b,00101010b,
+	.db 01010101b,01000000b,01010101b,00100101b,01010100b,00000101b,01010000b,10110100b,01010101b,00100010b,10101000b,01000010b,
+	.db 01010101b,11011000b,01100101b,00100111b,01100110b,01100110b,01010000b,10100100b,10010101b,01010010b,10101000b,00100100b,
+	.db 01010101b,01010100b,01000101b,00100101b,01000100b,01010101b,01010000b,01001001b,00010101b,01010010b,10101000b,00101000b,
+	.db 01001001b,01010100b,01000010b,00100101b,01000111b,01010101b,00100000b,00110001b,11001001b,00100001b,00010010b,11001110b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,
+
+game_over_bkg:
+	.db 00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00011011b,11011111b,11110011b,11011101b,11100000b,11011000b,00000000b,00110110b,01111101b,11100001b,10110001b,11101100b,
+	.db 00111011b,11000111b,01111011b,11111110b,11110001b,11011100b,00000000b,01110111b,00111101b,11100011b,10111001b,11111110b,
+	.db 01111011b,11000111b,01111011b,11011110b,11110011b,11011110b,00000000b,11110111b,10111110b,11000111b,10111101b,11101110b,
+	.db 01111011b,11000101b,01111011b,01011110b,11010011b,11011110b,00000000b,10110111b,10011110b,11000110b,10111101b,11100110b,
+	.db 01011010b,11001111b,01011011b,11011010b,11110011b,01000000b,00000000b,11110110b,10010111b,11000111b,10000001b,10100000b,
+	.db 01111011b,11001111b,01111011b,11011110b,11110011b,11000010b,00000000b,11110111b,10011111b,10000111b,10000101b,11100000b,
+	.db 00111011b,11001111b,01111011b,11011110b,11110001b,11000100b,00000000b,01110111b,00001111b,00000011b,10001001b,11100000b,
+	.db 00011011b,11000111b,11111011b,11011110b,11110000b,11111000b,00000000b,00110110b,00001111b,10000001b,11110001b,11100000b,
+	.db 00000011b,11000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000011b,10000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00011000b,00000000b,00000000b,00000000b,00000000b,00000111b,11110000b,00000000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000000b,00111111b,11111110b,00000000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000000b,11111111b,11111111b,10000000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000001b,11111111b,11111111b,11000000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000011b,11111111b,11111111b,11100000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000111b,11111111b,11111111b,11110000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00001111b,11111111b,11111111b,11111000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00011111b,11111111b,11111111b,11111100b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00011111b,11111111b,11111111b,11111100b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00011111b,11111111b,11111111b,11111100b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00111100b,00111111b,11111111b,11111111b,11111110b,00011110b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00111110b,00111111b,11111111b,11111111b,11111110b,00111110b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,01111111b,00111111b,11111111b,11111111b,11111110b,01111111b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,01111111b,10111111b,11111111b,11111111b,11111110b,11111111b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,11111111b,10111111b,11111111b,11111111b,11111110b,11111111b,10000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000001b,11111111b,10111111b,11111111b,11111111b,11111110b,11111111b,11000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,11111111b,10111111b,11111111b,11111111b,11111111b,11111111b,10000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,11111111b,11111111b,11111111b,11111111b,11111111b,11111111b,10000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,01111111b,11010111b,11011111b,11111101b,11110101b,11111111b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000111b,11011100b,00000111b,11110000b,00111101b,11110000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00011100b,00000011b,11100000b,00011100b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00001100b,00000001b,11000000b,00011100b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00001100b,00000011b,11100000b,00011000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00011100b,00000011b,11100000b,00011100b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00111100b,00000111b,11110000b,00011100b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00011100b,00011110b,10111100b,00011100b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00011111b,11111100b,10011111b,11111100b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00001111b,11111100b,10011111b,11111000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000111b,11111100b,10011111b,11110000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000011b,11111100b,10011111b,11100000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000011b,00111111b,10111110b,01100000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00001111b,00111111b,11111110b,01111000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00111011b,00111111b,11111110b,11111110b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000011b,11111011b,10011111b,11111100b,11101111b,11000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,01111111b,11111011b,11101111b,11111111b,11111111b,11111111b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,11111111b,11111101b,11111111b,01101011b,11011111b,11111111b,10000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,11111111b,11111001b,11111001b,01001111b,10001111b,11111111b,10000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,11111111b,11100000b,11111110b,00011111b,10000011b,11111111b,10000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,01111111b,11000000b,11111010b,00001111b,10000001b,11111111b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00111111b,10000000b,01111111b,11111111b,00000000b,11111110b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00111111b,00000000b,01111111b,11111110b,00000000b,01111110b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00111110b,00000000b,00111111b,11111100b,00000000b,01111100b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000000b,00001111b,11111000b,00000000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000000b,00000111b,11110000b,00000000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,
+	.db 00000001b,10011001b,10011001b,10001101b,00101110b,11011000b,01110010b,00001000b,10010010b,11101010b,01010010b,11000000b,
+	.db 00100001b,01010101b,00100010b,00001001b,10100100b,10010100b,00100101b,00010101b,01011010b,01001011b,01010010b,10001000b,
+	.db 01111001b,10011001b,10010001b,00001101b,01100100b,11011000b,00100101b,00010001b,01010110b,01001010b,11010010b,11011110b,
+	.db 00010001b,00010101b,00001000b,10001001b,00100100b,10010100b,00100101b,00010101b,01010010b,01001010b,01010010b,10000100b,
+	.db 00000001b,00010101b,10110011b,00001101b,00100100b,11010100b,00100010b,00001000b,10010010b,01001010b,01001100b,11000000b,
+	.db 00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,00000000b,
+
 .end
