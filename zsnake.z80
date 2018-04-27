@@ -64,12 +64,48 @@ key_ENTER		.equ	9
 
 	; prep environment
 	call _runIndOff         ; Turn off runindicator
+	call reset_all
 	call menu
+	ret
+
+reset_all:
+	ld a,0
+	ld (stop_game),a
+	
+	ld a,3
+	ld (snake_len),a
+	
+	; 	.db  48, 31,  47, 31,  46, 31,
+	ld hl,snake
+	ld (hl),48
+	inc hl
+	ld (hl),31
+	inc hl
+	ld (hl),47
+	inc hl
+	ld (hl),31
+	inc hl
+	ld (hl),46
+	inc hl
+	ld (hl),31
+	
+	ld a,DIR_E
+	ld (dir),a
+	
+	ld hl,score_str
+	ld (hl),'0'
+	inc hl
+	ld (hl),'0'
+	inc hl
+	ld (hl),'0'
+	
 	ret
 
 ; #######################################################################################
 ; MENU
 ; #######################################################################################
+
+exit_game: .db 0
 
 menu:
 	call _bufClr          ; Clear the graphbuf
@@ -88,23 +124,28 @@ menu:
 	call menu_draw_cursor
 	call menu_handle_kb
 	
+	ld a,(exit_game)
+	cp 1
+	jp z,menu_exit_game
+	
 	call start_game
 	
-	;TODO - put this init into separate reset function?
-	ld a,0
-	ld (stop_game),a
+	call reset_all
 	jp menu
 	
-	; TODO - exit gracefully!
+menu_exit_game:
 	call _textMode
-	
 	ret
+
+; #######################################################################################
+; draw cursor
+; inputs: bc - new position, de - prev position
+; #######################################################################################
 
 ;pre-defined cursor position for menu elements
 cursor_pos_x: .db 3,34,65
 cursor_pos_y: .db 31,47
 
-; bc - new position, de - prev position
 menu_draw_cursor:
 	push bc
 	push de
@@ -186,6 +227,10 @@ menu_draw_cursor:
 	
 	ret
 
+; #######################################################################################
+; this blits a string directly onto the screen without double buffer
+; #######################################################################################
+
 loading_str: .db "LOADING...",0
 
 print_loading:
@@ -199,7 +244,11 @@ print_loading:
 	call _drawText
 	call _blitBuf
 	ret
-	
+
+; #######################################################################################
+; handle user input in menu
+; #######################################################################################
+
 menu_handle_kb:
 	push bc
 	push de
@@ -269,11 +318,52 @@ menu_kp_draw:
 	jp menu_handle_kb
 	
 menu_kp_ENTER:
-	;TODO ck which element, exit gracefully if exit
+	push bc
 	call print_loading
 	call _bufClr
-	ld de,lvl2_map
+	pop bc
+	; bc - stores current pointer position
 	
+	ld a,c
+	cp 0 ; y-coor
+	jp z,mkp_sel_y0
+	
+;if we are still here, y=1
+	ld a,b
+	cp 0
+	jp z,mkp_sel_x0y1
+	cp 1
+	jp z,mkp_sel_x1y1
+	jp mkp_sel_x2y1
+
+mkp_sel_y0: ; y=0
+	ld a,b
+	cp 0
+	jp z,mkp_sel_x0y0
+	cp 1
+	jp z,mkp_sel_x1y0
+	jp mkp_sel_x2y0
+
+
+mkp_sel_x0y0:
+	ld de,lvl1_map
+	ret
+mkp_sel_x0y1:
+	ld de,lvl2_map
+	ret
+mkp_sel_x1y0:
+	ld de,lvl3_map
+	ret
+mkp_sel_x1y1:
+	ld de,lvl4_map
+	ret
+mkp_sel_x2y0:
+	ld de,lvl5_map
+	ret
+
+mkp_sel_x2y1: ; quit
+	ld a,1
+	ld (exit_game),a
 	ret
 
 ; #######################################################################################
@@ -332,11 +422,10 @@ apple_loop:
 ; GAME LOOP
 ; #######################################################################################
 
-cur_map:		.dw	0
 dir:			.db	DIR_E
 snake_len:	.db	3
 stop_game:	.db	0
-speed:		.dw	1000 ; 3000 = ca 1 fps
+speed:		.dw	1500 ; 3000 = ca 1 fps
 score_str:	.db	"000",0
 
 game_loop:
@@ -926,7 +1015,15 @@ draw_snake:
 
 dmloopvar: .db 48
 dmbytecnt: .db	3
+
 draw_map:
+	;reset loop vars
+	ld a,48
+	ld (dmloopvar),a
+	ld a,3
+	ld (dmbytecnt),a
+	
+	;start drawing
 	ld hl,_vram-1
 	;ld de,lvl2_map ; de should be set to chosen map before this function is called!
 	ld b,00000001b
@@ -1232,11 +1329,24 @@ div_loop:
 ; kills e
 ; returns a
 ; #######################################################################################
+
+rnd_seed: .db 123
+
 gen_rnd:
 	ld e,a
 	push de			; save parsed params
-	call _rndFloat	; call internal routine
-   ld a,(_OP1+6)	; get the random nr stored in (OP1 + 6)
+	
+	; the slow old method
+	;call _rndFloat	; call internal routine
+   ;ld a,(_OP1+6)	; get the random nr stored in (OP1 + 6)
+   
+   ; the faster r-reg method
+   ld a,(rnd_seed)
+   ld d,a
+   ld a,r
+   add a,d
+   ld (rnd_seed),a
+   
    pop de 			; get parsed params back
 gen_rnd_loop:
 	sub e				; a-e
